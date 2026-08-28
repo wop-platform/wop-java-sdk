@@ -180,8 +180,11 @@ public final class WopClient {
             return VerifyResult.fail(VerifyResult.Reason.INVALID_ENCRYPT_HEADER, e.getMessage());
         }
 
-        // 4. signedHeaders 完整性（I1/D2：有 body 必含 digest；L2 必含 x-wop-encrypt）
+        // 4. D2/I1 前置：有 body → digest 头必在且必入签；L2 → x-wop-encrypt 必入签
         boolean hasBody = body != null && body.length > 0;
+        if (hasBody && (lower.get(HEADER_DIGEST) == null || lower.get(HEADER_DIGEST).isBlank())) {
+            return VerifyResult.fail(VerifyResult.Reason.MISSING_DIGEST_HEADER, null);
+        }
         if (hasBody && !sign.signedHeaders().contains(HEADER_DIGEST)) {
             return VerifyResult.fail(VerifyResult.Reason.MISSING_SIGNED_HEADER,
                     "有 body 时 signedHeaders 必含 " + HEADER_DIGEST + "（I1）");
@@ -218,13 +221,9 @@ public final class WopClient {
 
         // 7. digest 复核（完整性类，明确；对象 = 线上原始报文字节）
         if (hasBody) {
-            String digestHeader = lower.get(HEADER_DIGEST);
-            if (digestHeader == null || digestHeader.isBlank()) {
-                return VerifyResult.fail(VerifyResult.Reason.MISSING_DIGEST_HEADER, null);
-            }
             ContentDigest.Parsed digest;
             try {
-                digest = ContentDigest.parse(digestHeader, inboundSuite);
+                digest = ContentDigest.parse(lower.get(HEADER_DIGEST), inboundSuite);
             } catch (WopSdkException e) {
                 return VerifyResult.fail(VerifyResult.Reason.INVALID_DIGEST_HEADER, e.getMessage());
             }
