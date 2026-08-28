@@ -31,9 +31,15 @@ public final class Sm4GcmStrategy implements MessageEncryptStrategy {
 
     @Override
     public CipherResult encrypt(byte[] plain, byte[] key) {
-        requireKey(key);
         byte[] iv = new byte[IV_LENGTH];
         RANDOM.nextBytes(iv);
+        return encryptForVector(plain, key, iv);
+    }
+
+    /** 固定 IV 加密——<b>黄金向量专用</b>（固定 IV 仅为字节级断言，生产违反不变式 I4）。 */
+    CipherResult encryptForVector(byte[] plain, byte[] key, byte[] iv) {
+        requireKey(key);
+        requireIv(iv);
         try {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION, BouncyCastleHolder.provider());
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "SM4"), new GCMParameterSpec(TAG_BITS, iv));
@@ -46,9 +52,7 @@ public final class Sm4GcmStrategy implements MessageEncryptStrategy {
     @Override
     public byte[] decrypt(byte[] cipher, byte[] iv, byte[] key) {
         requireKey(key);
-        if (iv == null || iv.length != IV_LENGTH) {
-            throw new CryptoException("MESSAGE_ENCRYPT", ALGORITHM, "IV 须为 12 字节");
-        }
+        requireIv(iv);
         try {
             Cipher decryptor = Cipher.getInstance(TRANSFORMATION, BouncyCastleHolder.provider());
             decryptor.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "SM4"), new GCMParameterSpec(TAG_BITS, iv));
@@ -76,6 +80,12 @@ public final class Sm4GcmStrategy implements MessageEncryptStrategy {
     private static void requireKey(byte[] key) {
         if (key == null || key.length != KEY_LENGTH) {
             throw new CryptoException("MESSAGE_ENCRYPT", ALGORITHM, "SM4 密钥须为 16 字节");
+        }
+    }
+
+    private static void requireIv(byte[] iv) {
+        if (iv == null || iv.length != IV_LENGTH) {
+            throw new CryptoException("MESSAGE_ENCRYPT", ALGORITHM, "IV 须为 12 字节");
         }
     }
 }
