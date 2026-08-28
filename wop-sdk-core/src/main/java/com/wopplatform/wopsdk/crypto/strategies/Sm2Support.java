@@ -25,6 +25,11 @@ public final class Sm2Support {
     private Sm2Support() {
     }
 
+
+    /** sm2p256v1 命名曲线域（含 OID，供 SPKI/PKCS#8 构造）。 */
+    public static org.bouncycastle.crypto.params.ECNamedDomainParameters namedDomain() {
+        return Sm2DomainHolder.NAMED;
+    }
     /** JCA BCEC 公钥 → BC 轻量参数（曲线守卫）。 */
     public static ECPublicKeyParameters toPublicParams(PublicKey publicKey) {
         if (!(publicKey instanceof ECPublicKey ec) || ec.getParameters() == null) {
