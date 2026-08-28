@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.wopplatform</groupId>
+    <artifactId>wop-java-sdk</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>wop-sdk-core</artifactId>
+  <name>WOP Java SDK :: Core</name>
+  <description>协议核心：套件解析、canonicalRequest、x-wop-sign、x-wop-content-digest、L2 数字信封、F6 校验顺序、I7 错误模糊化（运行时依赖仅 BouncyCastle）</description>
+
+  <dependencies>
+    <!-- 唯一运行时依赖：BouncyCastle（国密 SM2/SM3/SM4） -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.17.1</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <testResources>
+      <!-- 向量真源副本位于仓库根 vectors/（spec §4），CI 与本地测试消费同一份 -->
+      <testResource>
+        <directory>${project.basedir}/../vectors</directory>
+        <includes>
+          <include>crypto-vectors.json</include>
+        </includes>
+      </testResource>
+    </testResources>
+  </build>
+</project>
