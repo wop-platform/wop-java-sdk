@@ -122,11 +122,7 @@ public final class KeyCodec {
                 .replaceAll("-----END [A-Z0-9 ]+-----", "")
                 .replaceAll("\\s+", "");
         try {
-            byte[] der = Base64.getDecoder().decode(text);
-            if (der.length == 0) {
-                throw new IllegalArgumentException("空密钥材料");
-            }
-            return der;
+            return Base64.getDecoder().decode(text);
         } catch (IllegalArgumentException e) {
             throw new WopSdkException("密钥材料非合法 Base64: " + e.getMessage(), e);
         }

@@ -116,4 +116,39 @@ class OkHttpTransportTest {
         assertNull(response.headers().get("x-wop-sign"));
         assertEquals(0, response.body().length);
     }
+
+    @Test
+    void defaultConstructorTrailingSlashBaseUrlAndRelativePath() throws Exception {
+        enqueue(200, "x");
+        server.start();
+        // 尾斜杠 baseUrl + 无斜杠相对 path
+        OkHttpTransport trailing = new OkHttpTransport(server.url("/sub/").toString());
+        TransportResponse response = trailing.send(
+                new RequestDraft("POST", "gateway/x", Map.of("x-wop-appkey", "a"), new byte[]{1}));
+        assertEquals(200, response.statusCode());
+        assertEquals("/sub/gateway/x", server.takeRequest().getPath());
+
+        // 无参构造（无 baseUrl）+ 相对 path → 明确拒绝
+        OkHttpTransport noArg = new OkHttpTransport();
+        assertThrows(WopSdkException.class, () -> noArg.send(
+                new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
+    }
+
+    @Test
+    void headMethodSendsNoBody() throws Exception {
+        enqueue(200, "");
+        server.start();
+        OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
+        TransportResponse response = transport.send(
+                new RequestDraft("HEAD", "/p", Map.of("x-wop-appkey", "a"), null));
+        assertEquals(200, response.statusCode());
+        assertEquals("HEAD", server.takeRequest().getMethod());
+    }
+
+    @Test
+    void blankBaseUrlTreatedAsAbsent() {
+        OkHttpTransport blank = new OkHttpTransport("   ");
+        assertThrows(WopSdkException.class, () -> blank.send(
+                new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
+    }
 }

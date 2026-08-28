@@ -90,6 +90,9 @@ public final class WopClient {
         }
 
         byte[] wireBody = body;
+        if (!hasBody) {
+            wireBody = null;   // 无 body 统一为 null（空数组归一，D2）
+        }
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put(HEADER_APPKEY, config.appKey());
         headers.put(HEADER_TIMESTAMP, Long.toString(clock.getAsLong()));

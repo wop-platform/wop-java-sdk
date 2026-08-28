@@ -56,17 +56,13 @@ public final class JdkHttpTransport implements Transport {
             throw new WopSdkException("JDK HttpClient 传输被中断", e);
         }
         Map<String, String> headers = new LinkedHashMap<>();
-        response.headers().map().forEach((name, values) -> {
-            if (!values.isEmpty()) {
-                headers.put(name.toLowerCase(), values.get(0));
-            }
-        });
+        response.headers().map().forEach((name, values) -> headers.put(name.toLowerCase(), values.get(0)));
         return new TransportResponse(response.statusCode(), headers, response.body());
     }
 
     private String resolve(RequestDraft draft) {
         String path = draft.path();
-        if (path.startsWith("http://") || path.startsWith("https://")) {
+        if (path.startsWith("http")) {   // http:/ 与 https:// 同判
             return path;
         }
         if (baseUrl == null) {

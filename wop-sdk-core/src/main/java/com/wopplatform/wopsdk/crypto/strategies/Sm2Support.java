@@ -14,7 +14,7 @@ import java.security.PublicKey;
 /**
  * SM2 密钥形态守卫与转换（I5 合规边界 + BCEC ↔ BC 轻量参数）。
  * <p>
- * 仅接受 sm2p256v1 推荐曲线域，防非 SM2 EC 密钥静默参与国密运算；
+ * 仅接受 sm2p256v1 推荐曲线域（指纹整体比较，防非 SM2 EC 密钥静默参与国密运算）；
  * 非法输入抛 {@link IllegalArgumentException}，由策略包装为 {@link CryptoException} 或归入模糊失败。
  */
 public final class Sm2Support {
@@ -25,37 +25,30 @@ public final class Sm2Support {
     private Sm2Support() {
     }
 
+    /** JCA BCEC 公钥 → BC 轻量参数（曲线守卫）。 */
+    public static ECPublicKeyParameters toPublicParams(PublicKey publicKey) {
+        if (!(publicKey instanceof ECPublicKey ec)) {
+            throw new IllegalArgumentException("公钥非 SM2 椭圆曲线密钥");
+        }
+        return new ECPublicKeyParameters(ec.getQ(), domainOf(ec.getParameters()));
+    }
 
     /** sm2p256v1 命名曲线域（含 OID，供 SPKI/PKCS#8 构造）。 */
     public static org.bouncycastle.crypto.params.ECNamedDomainParameters namedDomain() {
         return Sm2DomainHolder.NAMED;
     }
-    /** JCA BCEC 公钥 → BC 轻量参数（曲线守卫）。 */
-    public static ECPublicKeyParameters toPublicParams(PublicKey publicKey) {
-        if (!(publicKey instanceof ECPublicKey ec) || ec.getParameters() == null) {
-            throw new IllegalArgumentException("公钥非 SM2 椭圆曲线密钥（缺少命名曲线参数）");
-        }
-        ECDomainParameters domain = domainOf(ec.getParameters());
-        return new ECPublicKeyParameters(ec.getQ(), domain);
-    }
 
     /** JCA BCEC 私钥 → BC 轻量参数（曲线守卫）。 */
     public static ECPrivateKeyParameters toPrivateParams(PrivateKey privateKey) {
-        if (!(privateKey instanceof ECPrivateKey ec) || ec.getParameters() == null) {
-            throw new IllegalArgumentException("私钥非 SM2 椭圆曲线密钥（缺少命名曲线参数）");
+        if (!(privateKey instanceof ECPrivateKey ec)) {
+            throw new IllegalArgumentException("私钥非 SM2 椭圆曲线密钥");
         }
-        ECDomainParameters domain = domainOf(ec.getParameters());
-        return new ECPrivateKeyParameters(ec.getD(), domain);
+        return new ECPrivateKeyParameters(ec.getD(), domainOf(ec.getParameters()));
     }
 
-    /** 曲线守卫：密钥自带域须与 SM2 推荐曲线 sm2p256v1 一致。 */
+    /** 曲线守卫：密钥自带域指纹须与 SM2 推荐曲线 sm2p256v1 完全一致。 */
     public static void requireSm2Domain(ECDomainParameters domain) {
-        ECDomainParameters sm2 = Sm2DomainHolder.SM2;
-        if (domain == null
-                || !domain.getN().equals(sm2.getN())
-                || !domain.getG().normalize().equals(sm2.getG().normalize())
-                || !domain.getCurve().getA().toBigInteger().equals(sm2.getCurve().getA().toBigInteger())
-                || !domain.getCurve().getB().toBigInteger().equals(sm2.getCurve().getB().toBigInteger())) {
+        if (domain == null || !fingerprint(domain).equals(Sm2DomainHolder.FINGERPRINT)) {
             throw new IllegalArgumentException("密钥曲线非 SM2 推荐曲线 sm2p256v1");
         }
     }
@@ -79,5 +72,15 @@ public final class Sm2Support {
         ECDomainParameters domain = new ECDomainParameters(spec.getCurve(), spec.getG(), spec.getN());
         requireSm2Domain(domain);
         return domain;
+    }
+
+    /** 域指纹：n|a|b|Gx|Gy 十六进制拼接（无短路分支）。 */
+    private static String fingerprint(ECDomainParameters domain) {
+        ECPoint g = domain.getG().normalize();
+        return domain.getN().toString(16) + '|'
+                + domain.getCurve().getA().toBigInteger().toString(16) + '|'
+                + domain.getCurve().getB().toBigInteger().toString(16) + '|'
+                + g.getAffineXCoord().toBigInteger().toString(16) + '|'
+                + g.getAffineYCoord().toBigInteger().toString(16);
     }
 }

@@ -52,7 +52,7 @@ public final class OkHttpTransport implements Transport {
         try (Response response = client.newCall(builder.build()).execute()) {
             Map<String, String> headers = new LinkedHashMap<>();
             response.headers().forEach(pair -> headers.put(pair.component1().toLowerCase(), pair.component2()));
-            byte[] body = response.body() == null ? new byte[0] : response.body().bytes();
+            byte[] body = response.body().bytes();
             return new TransportResponse(response.code(), headers, body);
         } catch (IOException e) {
             throw new WopSdkException("OkHttp 传输失败: " + e.getMessage(), e);
@@ -61,7 +61,7 @@ public final class OkHttpTransport implements Transport {
 
     private String resolve(RequestDraft draft) {
         String path = draft.path();
-        if (path.startsWith("http://") || path.startsWith("https://")) {
+        if (path.startsWith("http")) {   // http:/ 与 https:// 同判
             return path;
         }
         if (baseUrl == null) {

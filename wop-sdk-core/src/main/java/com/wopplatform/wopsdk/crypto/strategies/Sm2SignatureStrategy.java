@@ -43,8 +43,6 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
             signer.init(true, params);
             signer.update(data, 0, data.length);
             return derToRs(signer.generateSignature());
-        } catch (CryptoException e) {
-            throw e;
         } catch (Exception e) {
             throw new CryptoException("SIGNATURE", ALGORITHM, "SM2 签名失败", e);
         }
@@ -61,8 +59,6 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
             verifier.init(false, params);
             verifier.update(data, 0, data.length);
             return verifier.verifySignature(rsToDer(signature));
-        } catch (CryptoException e) {
-            throw e;
         } catch (Exception e) {
             throw new CryptoException("SIGNATURE", ALGORITHM, "SM2 验签执行失败", e);
         }
@@ -76,26 +72,19 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
     /** BC 签名（DER SEQUENCE{r, s}）→ 裸 r||s 64B（D9 线上编码）。 */
     private static byte[] derToRs(byte[] der) throws IOException {
         ASN1Sequence sequence = (ASN1Sequence) ASN1Primitive.fromByteArray(der);
-        if (sequence.size() != 2) {
-            throw new IOException("SM2 DER 签名结构非法");
-        }
         BigInteger r = ASN1Integer.getInstance(sequence.getObjectAt(0)).getValue();
         BigInteger s = ASN1Integer.getInstance(sequence.getObjectAt(1)).getValue();
         return concat(to32(r), to32(s));
     }
 
     /** 裸 r||s 64B → DER SEQUENCE{r, s}（仅 JVM 内部喂 BC 验签器）。 */
-    private static byte[] rsToDer(byte[] rs) {
+    private static byte[] rsToDer(byte[] rs) throws IOException {
         BigInteger r = new BigInteger(1, Arrays.copyOfRange(rs, 0, RS_BYTES));
         BigInteger s = new BigInteger(1, Arrays.copyOfRange(rs, RS_BYTES, RS_BYTES * 2));
         ASN1EncodableVector vector = new ASN1EncodableVector();
         vector.add(new ASN1Integer(r));
         vector.add(new ASN1Integer(s));
-        try {
-            return new DERSequence(vector).getEncoded();
-        } catch (IOException e) {
-            throw new CryptoException("SIGNATURE", ALGORITHM, "SM2 r||s → DER 编码失败", e);
-        }
+        return new DERSequence(vector).getEncoded();
     }
 
     /** 定长 32B 大端（高位左补零）。 */

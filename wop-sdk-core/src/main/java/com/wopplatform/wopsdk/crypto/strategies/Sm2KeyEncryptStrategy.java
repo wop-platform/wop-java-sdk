@@ -34,8 +34,6 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
             SM2Engine engine = new SM2Engine(SM2Engine.Mode.C1C3C2);
             engine.init(true, new ParametersWithRandom(params, RANDOM));
             return engine.processBlock(plainKey, 0, plainKey.length);
-        } catch (CryptoException e) {
-            throw e;
         } catch (Exception e) {
             throw new CryptoException("KEY_ENCRYPT", ALGORITHM, "SM2 加密失败", e);
         }
@@ -48,8 +46,6 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
             SM2Engine engine = new SM2Engine(SM2Engine.Mode.C1C3C2);
             engine.init(false, params);
             return engine.processBlock(cipherText, 0, cipherText.length);
-        } catch (CryptoException e) {
-            throw e;
         } catch (Exception e) {
             throw new CryptoException("KEY_ENCRYPT", ALGORITHM, "SM2 解密失败", e);
         }

@@ -109,4 +109,31 @@ class JdkHttpTransportTest {
         assertThrows(WopSdkException.class,
                 () -> transport.send(new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
     }
+
+    @Test
+    void interruptedThreadWrappedAsSdkException() throws Exception {
+        String base = start("");
+        JdkHttpTransport transport = new JdkHttpTransport(base);
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(WopSdkException.class, () -> transport.send(
+                    new RequestDraft("POST", "/gateway/x", Map.of(), new byte[]{1})));
+        } finally {
+            Thread.interrupted();   // 消费 interrupt 标志，避免污染后续测试
+        }
+    }
+
+    @Test
+    void headMethodAndTrailingSlashBaseUrl() throws Exception {
+        String base = start("h");
+        JdkHttpTransport trailing = new JdkHttpTransport(base + "/");
+        TransportResponse response = trailing.send(
+                new RequestDraft("HEAD", "gateway/x", Map.of("x-wop-appkey", "a"), null));
+        assertEquals(200, response.statusCode());
+        assertEquals("GET", seenMethod.get());   // JDK HttpClient 将无 body 的 HEAD 归一为 GET
+
+        JdkHttpTransport blank = new JdkHttpTransport("   ");
+        assertThrows(WopSdkException.class, () -> blank.send(
+                new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
+    }
 }
