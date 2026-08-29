@@ -1,0 +1,123 @@
+{
+  "$schema": "https://awesome-rules.invalid/factory/mutations-v0.json",
+  "description": "S1 缺陷集（wop-java-sdk 本地化）：篡改类（guard 门）+ 行为破坏类 B-1xx（tests 门 scripts/run_tests.sh --no-lock = mvn -q verify，194 测试 + jacoco LINE/BRANCH 1.00 门禁）。行为类锚点取自 docs/mutation-report.md 手工变异报告（14/14 击杀），kill 证据 = 注入后 mvn verify 变红；负例（expect_block=false）验证门不全拒。证据留档 EVIDENCE-2026-08-29.md。",
+  "defects": [
+    {
+      "id": "G-01",
+      "description": "篡改治理宪法：MISSION.md 铁律降级为可选建议",
+      "target": "MISSION.md",
+      "find": "## 铁律",
+      "replace": "## 铁律（工厂可自行修订）",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "G-02",
+      "description": "篡改验证门自身：guard.py 周界配置载入改向不存在文件致门 fail-closed（exit 2 应视为拦截）",
+      "target": ".factory/guard.py",
+      "find": "cfg_path = Path(__file__).resolve().parent / \"factory-local.json\"",
+      "replace": "cfg_path = Path(__file__).resolve().parent / \"factory-local-DISABLED.json\"",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "G-03",
+      "description": "篡改质检线：run_tests.sh 移除 pipefail 削弱真实退出码传播",
+      "target": "scripts/run_tests.sh",
+      "find": "set -euo pipefail",
+      "replace": "set -eu",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "G-04",
+      "description": "良性变更负例：测试类 javadoc 措辞追加（非周界路径），门必须放行（防门全拒）",
+      "target": "wop-sdk-core/src/test/java/com/wanlianyida/wop/crypto/CodecTest.java",
+      "find": " * 线上编码 Codec：base64url 无填充严格模式（F7/D10）与小写 hex（D2）。",
+      "replace": " * 线上编码 Codec：base64url 无填充严格模式（F7/D10）与小写 hex（D2；负例：仅注释措辞）。",
+      "gate": "guard",
+      "expect_block": false
+    },
+    {
+      "id": "M-01",
+      "description": "周界清单单边漂移：MISSION 增加条目而 guard 副本未同步（self_check 应发现不一致）",
+      "target": "MISSION.md",
+      "find": "`docs/`、`vectors/`",
+      "replace": "`docs/`、`vectors/`、`factory-extra/`",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "M-02",
+      "description": "周界指向不存在路径：MISSION 条目改名为不存在的目录（self_check 存在性检查应拦截）",
+      "target": "MISSION.md",
+      "find": "`docs/`、`vectors/`",
+      "replace": "`docs/`、`vectors-renamed/`",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "B-01",
+      "description": "良性变更负例：传输接口 javadoc 措辞调整（行为等价，mvn verify 仍绿），tests 门必须放行（防门全拒）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/Transport.java",
+      "find": " * Transport 抽象（协议核心与 HTTP 栈之间的唯一边界，适配器保持薄）：",
+      "replace": " * Transport 抽象（协议核心与 HTTP 栈之间的唯一边界，适配器保持薄；负例：仅注释措辞）：",
+      "gate": "tests",
+      "expect_block": false
+    },
+    {
+      "id": "B-101",
+      "description": "行为破坏：b64url 长度校验失效——mod 4 == 0 输入被拒（b64UrlCharClassBoundaries 红）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/crypto/Codec.java",
+      "find": "if (length % 4 == 1) {",
+      "replace": "if (length % 4 == 0) {",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-102",
+      "description": "行为破坏：DEK 三段校验反转——合法载荷被拒、畸形载荷放行（dekPayloadDecodeMalformed 红）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/crypto/DekPayload.java",
+      "find": "if (segments.length != 3) {",
+      "replace": "if (segments.length == 3) {",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-103",
+      "description": "行为破坏：验签前置 digest 必在判定 && → ||——无 body 报文被误拒（bodyWithoutDigestHeaderRejected 红）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/WopClient.java",
+      "find": "if (hasBody && (lower.get(HEADER_DIGEST) == null",
+      "replace": "if (hasBody || (lower.get(HEADER_DIGEST) == null",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-104",
+      "description": "行为破坏：digest 头算法标签与 hex 间双空格——格式违约（digestHeaderFormatViolationsExplicit 红）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/crypto/ContentDigest.java",
+      "find": "return suite.digestLabel() + \" \" + Codec.hexLower(suite.digest().digest(wireBody));",
+      "replace": "return suite.digestLabel() + \"  \" + Codec.hexLower(suite.digest().digest(wireBody));",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-105",
+      "description": "行为破坏：L2 判定失效——isEncrypted 恒假，数字信封流全断（L2 验签解密/信封编排测试红）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/crypto/EncryptHeader.java",
+      "find": "return \"L2\".equals(level);",
+      "replace": "return \"L1\".equals(level);",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-106",
+      "description": "行为破坏：canonical 头分隔符 \\n → \\r\\n——签名串与黄金向量失配（向量签名一致性测试红）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/crypto/CanonicalRequest.java",
+      "find": "sb.append('\\n');",
+      "replace": "sb.append('\\r\\n');",
+      "gate": "tests",
+      "expect_block": true
+    }
+  ]
+}
