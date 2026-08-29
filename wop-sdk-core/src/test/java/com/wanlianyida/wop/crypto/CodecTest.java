@@ -1,5 +1,6 @@
 package com.wanlianyida.wop.crypto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -59,6 +60,40 @@ class CodecTest {
         // 长度 mod 4 == 1 不可能是合法 base64
         assertThrows(IllegalArgumentException.class, () -> Codec.b64UrlDecode("a"));
         assertThrows(IllegalArgumentException.class, () -> Codec.b64UrlDecode("abcde"));
+    }
+
+    // spec:formatRules-b64url —— 三件套：全量循环 + 未知 id/expect 哨兵 + 条数哨兵（6 条）
+    @Test
+    void b64UrlFormatRulesAllVectors() {
+        int consumed = 0;
+        for (JsonNode rule : TestVectors.root().withArray("formatRules")) {
+            String id = rule.path("id").asText();
+            if (!id.startsWith("b64url-")) {
+                continue;   // header-* 族在 ContentDigestTest.formatRulesAllVectors 全量消费
+            }
+            consumed++;
+            String value = rule.path("value").asText();
+            String expect = rule.path("expect").asText();
+            switch (id) {
+                case "b64url-with-padding", "b64url-illegal-char",
+                     "b64url-trailing-bits-noncanonical-2", "b64url-trailing-bits-noncanonical-3" -> {
+                    assertEquals("reject", expect, id + " expect 哨兵");
+                    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                            () -> Codec.b64UrlDecode(value), id + " 须拒收");
+                    assertTrue(ex.getMessage().contains("base64url"));
+                }
+                case "b64url-trailing-bits-canonical-2" -> {
+                    assertEquals("accept", expect, id + " expect 哨兵");
+                    assertArrayEquals(new byte[]{0x00}, Codec.b64UrlDecode(value));        // "AA" → 1 字节 0x00
+                }
+                case "b64url-trailing-bits-canonical-3" -> {
+                    assertEquals("accept", expect, id + " expect 哨兵");
+                    assertArrayEquals(new byte[]{0x4D, 0x61}, Codec.b64UrlDecode(value));  // "TWE" → "Ma"
+                }
+                default -> throw new IllegalStateException("未预期 b64url 向量 id: " + id);
+            }
+        }
+        assertEquals(6, consumed, "b64url-* 条数哨兵（真源 formatRules 12 条中 b64url 族 6 条）");
     }
 
     @Test

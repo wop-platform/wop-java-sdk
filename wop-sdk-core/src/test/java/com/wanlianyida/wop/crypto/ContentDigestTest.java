@@ -5,6 +5,7 @@ import com.wanlianyida.wop.WopSdkException;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -53,24 +54,43 @@ class ContentDigestTest {
 
     @Test
     void formatRulesAllVectors() {
-        // formatRules 的 header-* 向量：accept/reject 与套件绑定逐一执行
-        for (JsonNode rule : TestVectors.root().withArray("formatRules")) {
+        // spec:formatRules —— 三件套：全量循环（header-* 走 ContentDigest，b64url-* 走 Codec）
+        // + 未知 id/expect 哨兵 + 条数哨兵（12）
+        JsonNode rules = TestVectors.root().withArray("formatRules");
+        assertEquals(12, rules.size(), "formatRules 条数哨兵（真源升格后 12 条）");
+        for (JsonNode rule : rules) {
             String id = rule.path("id").asText();
-            if (!id.startsWith("header-")) {
-                continue; // b64url 规则在 Codec 测试覆盖
-            }
             String value = rule.path("value").asText();
             String expect = rule.path("expect").asText();
             AlgorithmSuite suite = AlgorithmSuite.parse(rule.path("suite").asText("WOP-RSA3072-SHA256"));
-            switch (expect) {
-                case "accept" -> ContentDigest.parse(value, suite);
-                case "reject" -> {
+            switch (id) {
+                case "header-rsa-ok", "header-sm2-ok" -> {
+                    assertEquals("accept", expect, id + " expect 哨兵");
+                    ContentDigest.parse(value, suite);
+                }
+                case "header-crossfamily", "header-double-space",
+                     "header-uppercase-hex", "header-wrong-hex-len" -> {
+                    assertEquals("reject", expect, id + " expect 哨兵");
                     WopSdkException ex = assertThrows(WopSdkException.class,
-                            () -> ContentDigest.parse(value, suite));
+                            () -> ContentDigest.parse(value, suite), id + " 须拒收");
                     // 错误明确指出格式问题（解析类，非模糊）
                     assertTrue(ex.getMessage() != null && !ex.getMessage().isBlank());
                 }
-                default -> throw new IllegalStateException("未知 expect: " + expect);
+                case "b64url-with-padding", "b64url-illegal-char",
+                     "b64url-trailing-bits-noncanonical-2", "b64url-trailing-bits-noncanonical-3" -> {
+                    assertEquals("reject", expect, id + " expect 哨兵");
+                    assertThrows(IllegalArgumentException.class,
+                            () -> Codec.b64UrlDecode(value), id + " 须拒收");
+                }
+                case "b64url-trailing-bits-canonical-2" -> {
+                    assertEquals("accept", expect, id + " expect 哨兵");
+                    assertArrayEquals(new byte[]{0x00}, Codec.b64UrlDecode(value));        // "AA"
+                }
+                case "b64url-trailing-bits-canonical-3" -> {
+                    assertEquals("accept", expect, id + " expect 哨兵");
+                    assertArrayEquals(new byte[]{0x4D, 0x61}, Codec.b64UrlDecode(value));  // "TWE" → "Ma"
+                }
+                default -> throw new IllegalStateException("未预期 formatRules 向量 id: " + id);
             }
         }
     }
