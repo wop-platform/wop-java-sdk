@@ -136,4 +136,49 @@ class JdkHttpTransportTest {
         assertThrows(WopSdkException.class, () -> blank.send(
                 new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
     }
+
+    // spec:max-response-bytes —— 11MB 上限边界：超 1 字节拒 / 恰好上限过（流式计数，读取过程中生效）
+
+    /** 启动返回固定长度 0x5A 填充体的服务器（大body场景，避免在内存里准备期望值）。 */
+    private String startFixedBody(int length) throws IOException {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/big", exchange -> {
+            exchange.sendResponseHeaders(200, length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                byte[] chunk = new byte[64 * 1024];
+                java.util.Arrays.fill(chunk, (byte) 0x5A);
+                int remaining = length;
+                while (remaining > 0) {
+                    int n = Math.min(chunk.length, remaining);
+                    os.write(chunk, 0, n);
+                    remaining -= n;
+                }
+            } catch (IOException ignored) {
+                // 客户端超限中止读取后断管属预期
+            }
+        });
+        server.start();
+        return "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    @Test
+    void oversizedBodyRejectedWhileStreaming() throws Exception {
+        String base = startFixedBody(JdkHttpTransport.MAX_RESPONSE_BYTES + 1);
+        JdkHttpTransport transport = new JdkHttpTransport(base);
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/big", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("上限"));
+    }
+
+    @Test
+    void exactMaxBodyAccepted() throws Exception {
+        String base = startFixedBody(JdkHttpTransport.MAX_RESPONSE_BYTES);
+        JdkHttpTransport transport = new JdkHttpTransport(base);
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/big", Map.of(), new byte[]{1}));
+        assertEquals(200, response.statusCode());
+        assertEquals(JdkHttpTransport.MAX_RESPONSE_BYTES, response.body().length);
+        assertEquals((byte) 0x5A, response.body()[0]);
+        assertEquals((byte) 0x5A, response.body()[JdkHttpTransport.MAX_RESPONSE_BYTES - 1]);
+    }
 }

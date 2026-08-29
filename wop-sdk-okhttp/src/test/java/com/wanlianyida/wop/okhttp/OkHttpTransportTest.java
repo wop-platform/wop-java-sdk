@@ -151,4 +151,45 @@ class OkHttpTransportTest {
         assertThrows(WopSdkException.class, () -> blank.send(
                 new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
     }
+
+    // spec:max-response-bytes —— 11MB 上限边界：超 1 字节拒 / 恰好上限过（两条路径：Content-Length 预检 + 流式计数）
+
+    @Test
+    void oversizedContentLengthRejectedBeforeRead() throws Exception {
+        server.enqueue(new MockResponse().setResponseCode(200)
+                .setBody(new okio.Buffer().write(new byte[OkHttpTransport.MAX_RESPONSE_BYTES + 1])));
+        server.start();
+        OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("上限"));
+    }
+
+    @Test
+    void chunkedOversizedBodyRejectedWhileStreaming() throws Exception {
+        // 分块传输无 Content-Length → 预检失效，须由流式计数在读取过程中中止
+        server.enqueue(new MockResponse().setResponseCode(200)
+                .setChunkedBody(new okio.Buffer().write(new byte[OkHttpTransport.MAX_RESPONSE_BYTES + 1]),
+                        64 * 1024));
+        server.start();
+        OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("上限"));
+    }
+
+    @Test
+    void exactMaxBodyAccepted() throws Exception {
+        byte[] exact = new byte[OkHttpTransport.MAX_RESPONSE_BYTES];
+        new java.util.Random(42).nextBytes(exact);
+        server.enqueue(new MockResponse().setResponseCode(200)
+                .setBody(new okio.Buffer().write(exact)));
+        server.start();
+        OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+        assertEquals(200, response.statusCode());
+        assertEquals(OkHttpTransport.MAX_RESPONSE_BYTES, response.body().length);
+        assertArrayEquals(exact, response.body());
+    }
 }

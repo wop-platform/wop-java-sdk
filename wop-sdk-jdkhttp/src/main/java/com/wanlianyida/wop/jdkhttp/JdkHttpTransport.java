@@ -5,7 +5,9 @@ import com.wanlianyida.wop.Transport;
 import com.wanlianyida.wop.TransportResponse;
 import com.wanlianyida.wop.WopSdkException;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -19,6 +21,9 @@ import java.util.Map;
  * baseUrl 为空时要求 draft.path 为绝对 URL。
  */
 public final class JdkHttpTransport implements Transport {
+
+    /** 响应体读取上限（10MB 线上体上限 + 信封膨胀余量，防失控读，D5 精神）。 */
+    public static final int MAX_RESPONSE_BYTES = 11 << 20;
 
     private final HttpClient client;
     private final String baseUrl;
@@ -46,18 +51,40 @@ public final class JdkHttpTransport implements Transport {
                 ? "GET" : draft.method(), publisher);
         draft.headers().forEach(builder::header);
 
-        HttpResponse<byte[]> response;
+        HttpResponse<InputStream> response;
         try {
-            response = client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+            response = client.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
         } catch (IOException e) {
             throw new WopSdkException("JDK HttpClient 传输失败: " + e.getMessage(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new WopSdkException("JDK HttpClient 传输被中断", e);
         }
+        byte[] body;
+        try (InputStream stream = response.body()) {
+            body = readBodyLimited(stream);
+        } catch (IOException e) {
+            throw new WopSdkException("JDK HttpClient 读取响应体失败: " + e.getMessage(), e);
+        }
         Map<String, String> headers = new LinkedHashMap<>();
         response.headers().map().forEach((name, values) -> headers.put(name.toLowerCase(), values.get(0)));
-        return new TransportResponse(response.statusCode(), headers, response.body());
+        return new TransportResponse(response.statusCode(), headers, body);
+    }
+
+    /** 流式读取响应体：逐块计数，超 {@link #MAX_RESPONSE_BYTES} 即中止并抛协议类异常（不做整体缓冲）。 */
+    private static byte[] readBodyLimited(InputStream stream) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        long total = 0;
+        int read;
+        while ((read = stream.read(chunk)) != -1) {
+            total += read;
+            if (total > MAX_RESPONSE_BYTES) {
+                throw new WopSdkException("JDK HttpClient 响应体超过 " + MAX_RESPONSE_BYTES + " 字节上限");
+            }
+            buffer.write(chunk, 0, read);
+        }
+        return buffer.toByteArray();
     }
 
     private String resolve(RequestDraft draft) {

@@ -9,7 +9,10 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
+import okio.BufferedSource;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -20,6 +23,9 @@ import java.util.Map;
  * okhttp 依赖 scope=provided（商户自带版本）；baseUrl 为空时要求 draft.path 为绝对 URL。
  */
 public final class OkHttpTransport implements Transport {
+
+    /** 响应体读取上限（10MB 线上体上限 + 信封膨胀余量，防失控读，D5 精神）。 */
+    public static final int MAX_RESPONSE_BYTES = 11 << 20;
 
     private static final MediaType OCTET_STREAM = MediaType.parse("application/octet-stream");
 
@@ -52,11 +58,33 @@ public final class OkHttpTransport implements Transport {
         try (Response response = client.newCall(builder.build()).execute()) {
             Map<String, String> headers = new LinkedHashMap<>();
             response.headers().forEach(pair -> headers.put(pair.component1().toLowerCase(), pair.component2()));
-            byte[] body = response.body().bytes();
+            byte[] body = readBodyLimited(response.body());
             return new TransportResponse(response.code(), headers, body);
         } catch (IOException e) {
             throw new WopSdkException("OkHttp 传输失败: " + e.getMessage(), e);
         }
+    }
+
+    /** 流式读取响应体：Content-Length 预检 + 逐块计数，超 {@link #MAX_RESPONSE_BYTES} 即中止并抛协议类异常。 */
+    private static byte[] readBodyLimited(ResponseBody responseBody) throws IOException {
+        long declared = responseBody.contentLength();
+        if (declared > MAX_RESPONSE_BYTES) {
+            throw new WopSdkException(
+                    "OkHttp 响应体超过 " + MAX_RESPONSE_BYTES + " 字节上限（Content-Length: " + declared + "）");
+        }
+        BufferedSource source = responseBody.source();
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        long total = 0;
+        int read;
+        while ((read = source.read(chunk)) != -1) {
+            total += read;
+            if (total > MAX_RESPONSE_BYTES) {
+                throw new WopSdkException("OkHttp 响应体超过 " + MAX_RESPONSE_BYTES + " 字节上限");
+            }
+            buffer.write(chunk, 0, read);
+        }
+        return buffer.toByteArray();
     }
 
     private String resolve(RequestDraft draft) {
