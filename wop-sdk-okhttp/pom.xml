@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.wopplatform</groupId>
+    <groupId>com.wanlianyida</groupId>
     <artifactId>wop-java-sdk</artifactId>
     <version>0.1.0</version>
   </parent>
@@ -16,7 +16,7 @@
 
   <dependencies>
     <dependency>
-      <groupId>com.wopplatform</groupId>
+      <groupId>com.wanlianyida</groupId>
       <artifactId>wop-sdk-core</artifactId>
       <version>${project.version}</version>
     </dependency>

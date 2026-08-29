@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.wopplatform</groupId>
+  <groupId>com.wanlianyida</groupId>
   <artifactId>wop-java-sdk</artifactId>
   <version>0.1.0</version>
   <packaging>pom</packaging>
@@ -121,4 +121,99 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
+
+  <!-- ===== Maven Central 发布元数据（Central Portal 校验要求）===== -->
+  <developers>
+    <developer>
+      <id>wop-platform</id>
+      <name>WOP Platform Team</name>
+      <organization>wop-platform</organization>
+      <organizationUrl>https://github.com/wop-platform</organizationUrl>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/wop-platform/wop-java-sdk.git</connection>
+    <developerConnection>scm:git:git@github.com:wop-platform/wop-java-sdk.git</developerConnection>
+    <url>https://github.com/wop-platform/wop-java-sdk</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <profiles>
+    <!-- release profile：仅由 .github/workflows/release.yml 以 -P release 激活；
+         日常构建与 ci.yml 的 mvn verify 不受影响（不签名、不上传）。
+         发布路径 = Sonatype Maven Central Portal（OSSRH 2025-06 EOL 后的官方 mvn deploy 通道），
+         凭证经 ~/.m2/settings.xml 的 server（id=central）从环境变量注入，绝不入库。 -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.4.0</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.12.0</version>
+            <configuration>
+              <doclint>none</doclint>
+              <encoding>UTF-8</encoding>
+              <charset>UTF-8</charset>
+              <docencoding>UTF-8</docencoding>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.8</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <gpgArguments>
+                <arg>--pinentry-mode</arg>
+                <arg>loopback</arg>
+              </gpgArguments>
+            </configuration>
+          </plugin>
+          <!-- mvn deploy → 打包全部模块构件（含签名/source/javadoc）上传 Central Portal 并自动发布；
+               publishingServerId 对应 settings.xml 中 id=central 的 server -->
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.11.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
