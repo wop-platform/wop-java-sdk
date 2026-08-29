@@ -1,0 +1,100 @@
+name: Release
+
+# 打 tag vX.Y.Z 触发：verify（全量测试 + 覆盖率门禁，与 ci.yml 相同命令）全绿后，
+# 发布全部模块构件到 Maven Central，并自动完成 source/javadoc/GPG 签名要求。
+#
+# 发布路径：Sonatype Maven Central Portal（central-publishing-maven-plugin）。
+# OSSRH（oss.sonatype.org / s01）已于 2025-06-30 停服，Portal 是其官方后继，
+# 凭证形态不变：Portal 用户令牌 + GPG 签名。
+#
+# 组织级前置条件（一次性，未配置则本 workflow 在凭证步骤明确报错，不会半发布）：
+#   1. 在 https://central.sonatype.com 注册账号并验证 namespace `com.wanlianyida`
+#      （通过 GitHub 公开仓库 wop-platform/wop-java-sdk 校验）
+#   2. Portal 生成用户令牌（Account → Generate User Token），
+#      存为 GitHub Secret：MAVEN_CENTRAL_TOKEN，格式 `<token-user>:<token-pass>`
+#   3. 生成发布专用 GPG 密钥对，公钥上传到 Central Portal（Keys 页）；
+#      ASCII armor 私钥存为 Secret GPG_PRIVATE_KEY，口令存为 Secret GPG_PASSPHRASE
+#
+# 凭证一律经 GitHub Secrets 注入运行时环境，任何明文不落仓库文件（settings.xml
+# 仅含 ${env.*} 引用）。发布（mvn deploy）严格排在测试全绿之后，失败即中止，
+# 不留半发布状态。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish to Maven Central
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Check tag matches pom version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          POM_VERSION="$(mvn -B -ntp -q -N help:evaluate -Dexpression=project.version -DforceStdout)"
+          if [ "$TAG_VERSION" != "$POM_VERSION" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} 与根 pom 版本 ${POM_VERSION} 不一致（先执行 mvn versions:set -DnewVersion=${TAG_VERSION} 并提交全部模块 pom）"
+            exit 1
+          fi
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Write Maven settings.xml（凭证仅经 Secrets 注入环境变量）
+        env:
+          MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
+        run: |
+          TOKEN_USER="${MAVEN_CENTRAL_TOKEN%%:*}"
+          TOKEN_PASS="${MAVEN_CENTRAL_TOKEN#*:}"
+          if [ -z "$TOKEN_USER" ] || [ "$TOKEN_PASS" = "$MAVEN_CENTRAL_TOKEN" ]; then
+            echo "::error::secret MAVEN_CENTRAL_TOKEN 缺失或格式不对（应为 <token-user>:<token-pass>，由 Central Portal 生成）"
+            exit 1
+          fi
+          # 只导出到当前 job 的环境变量，settings.xml 里写 ${env.*} 引用，日志与文件均无明文
+          echo "MAVEN_CENTRAL_USERNAME=${TOKEN_USER}" >> "$GITHUB_ENV"
+          echo "MAVEN_CENTRAL_PASSWORD=${TOKEN_PASS}" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.m2"
+          cat > "$HOME/.m2/settings.xml" <<'SETTINGS'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+            <servers>
+              <!-- central-publishing-maven-plugin 的 publishingServerId -->
+              <server>
+                <id>central</id>
+                <username>${env.MAVEN_CENTRAL_USERNAME}</username>
+                <password>${env.MAVEN_CENTRAL_PASSWORD}</password>
+              </server>
+              <!-- maven-gpg-plugin 从 id=gpg.passphrase 的 server 读取口令 -->
+              <server>
+                <id>gpg.passphrase</id>
+                <passphrase>${env.GPG_PASSPHRASE}</passphrase>
+              </server>
+            </servers>
+          </settings>
+          SETTINGS
+
+      - name: Build, test and enforce coverage gate（与 ci.yml 相同命令）
+        run: mvn -B -ntp verify
+
+      - name: Publish to Maven Central（严格排在测试全绿之后）
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: mvn -B -ntp -P release -DskipTests deploy
