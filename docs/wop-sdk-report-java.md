@@ -126,5 +126,64 @@ d24283b build: 初始化 Maven 多模块骨架（core/okhttp/jdkhttp）与 JaCoC
 
 1. **`verifyResponse(headers, body)` 概念 API 映射为带 path**：canonicalRequest 第 3 段为 URI（F2/契约 §6.4），响应校验必须知道请求路径，无路径在数学上不可能重建签名串；提供 `(headers, body, requestPath)` 与 `(TransportResponse, RequestDraft)` 双形态，`verifyCallback(headers, body, path)` 与 spec 完全一致。已在 README 报告。
 2. **测试范围外的网关侧行为**（10.2 时效重放类时间窗、nonce 去重、10MB 限额流式断流）为网关职责，SDK 不重复实现；F9 仅出向组装。
-3. JaCoCo 门禁为每模块 BUNDLE 规则（行+分支各 ≥0.98）+ 报告呈现聚合数字；本机聚合分支 98.40%，剩余 6 个未覆盖分支为 JDK HttpClient 内部异常细节路径的等价形式（各模块单独均 ≥98%）。
+3. JaCoCo 门禁为每模块 BUNDLE 规则（行+分支各 ≥0.98）+ 报告呈现聚合数字；增量轮次 2 后聚合行+分支均 100.00%（见下）。
 4. 推送远端：按任务书由主会话负责，本仓未配置 remote。
+
+---
+
+## 增量轮次 2（2026-08-29，包迁移后基线 com.wanlianyida.wop）
+
+### 1. README 修正（用户反馈）
+
+- "可选适配器（二选一）"补齐第二选项 `wop-sdk-jdkhttp` 依赖块（中英双语），注释说明两者取舍（okhttp provided 商户自带 / jdkhttp 零依赖）
+- groupId 与包迁移保持一致：`com.wopplatform` → `com.wanlianyida`
+
+### 2. 故障注入测试场景（新增 3 个测试类，17 个用例）
+
+协议层（`FaultInjectionTest`，7 例）——在格式全合法的载体上注入故障，断言 I7 模糊/解析明确的分界：
+
+| 注入 | 期望 | 用例 |
+|------|------|------|
+| 信封 encrypted 段内单字符损伤（digest/签名按损伤后重算，直达 AEAD 层） | DECRYPT_FAILED（模糊，"解密失败"） | corruptedCiphertextInsideEnvelopeFailsVaguely |
+| 传输截断砍掉信封 JSON 闭括号（结构层损伤，公开可判定） | INVALID_ENCRYPTED_BODY（解析类明确） | truncatedEnvelopeFailsExplicitly |
+| DEK 载荷 key 段 31B 长度畸形（alg 正确、解包成功） | DECRYPT_FAILED（模糊） | dekKeyLengthCorruptionFailsVaguely |
+| 对端声明 SM2 套件但平台公钥为 RSA（族错配） | SIGNATURE_FAILED（模糊） | crossSuiteDeclaredInResponseFailsVaguely |
+| 同一签名响应跨端点重放（URI 入签） | SIGNATURE_FAILED；原路径仍通过（自证） | pathReplayAcrossEndpointsFails |
+| 签名段被中间层 URL 编码污染（%3D） | SIGNATURE_FAILED（模糊） | urlEncodedSignaturePollutionFails |
+| 非官方栈送大小写混合头名 | core 层大小写不敏感兜底，校验通过 | mixedCaseInboundHeaderNamesTolerated |
+
+网络层 okhttp（`OkHttpTransportFaultInjectionTest`，6 例）：不可路由地址连接超时（断言 SocketTimeoutException cause + 秒级返回）、延迟响应读超时、响应体中途断连（DISCONNECT_DURING_RESPONSE_BODY）、TLS 指向明文端口（禁静默重试）、502 状态透传（适配器不做状态语义）、响应头名小写规范化 + 大小写不敏感视图契约。
+
+网络层 jdkhttp（`JdkHttpTransportFaultInjectionTest`，4 例）：声明 Content-Length 内断流 IOException 包装、502 透传、头名规范化契约、204 无实体映射空数组。（拒连/线程中断见既有 JdkHttpTransportTest；不可路由超时因 JDK HttpClient 走系统代理在本机不稳定，弃用该形态。）
+
+### 3. 契约文档核对（用户反馈："找不到 new-gateway-access-contract.md，原则要保持一致"）
+
+- 文件位置：**不在 SDK 仓**，在网关仓 `gtsp-wop-gateway/scripts/poc/new-gateway-access-contract.md`（§6.4 WOP 渠道回调安全协议，草案状态）。spec 真源已迁公共仓 `wop-platform/wop-specs`（README 已指向）。
+- 一致性核对结论：SDK 与 **冻结真源（crypto-strategy-spec D2 + 网关实现 `GatewayConstants.HEADER_CONTENT_DIGEST`）完全一致**，即 `x-wop-content-digest: <sha-256|sm3> <小写hex>`；该契约文档 §6.4 第 304/307/320 行仍写旧名 `x-wop-content-sha256`（HmacSHA256 时代的"纯 sha256 hex"格式），属**文档滞后**而非实现分歧。canonicalRequest 5 段、signedHeaders 响应侧不含 appkey、L2 信封 `{"encrypted":...}`、DEK 包装算法等其余条款与 SDK 逐项一致。
+- 处置：SDK 仓不修改网关仓文档（真源只读）；建议主会话推动网关侧把 §6.4 三处头名与格式对齐 D2 冻结版。
+
+### 4. 增量后验收数字（mvn verify 原文关键行）
+
+```
+[INFO] Tests run: 182, Failures: 0, Errors: 0, Skipped: 0          ← core（+7 故障注入）
+[INFO] Tests run: 15, Failures: 0, Errors: 0, Skipped: 0          ← okhttp（9+6）
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0          ← jdkhttp（7+4）
+[INFO] WOP Java SDK ....................................... SUCCESS [  0.079 s]
+[INFO] WOP Java SDK :: Core ............................... SUCCESS [  1.852 s]
+[INFO] WOP Java SDK :: OkHttp Transport ................... SUCCESS [  3.977 s]
+[INFO] WOP Java SDK :: JDK HttpClient Transport ........... SUCCESS [  1.037 s]
+[INFO] BUILD SUCCESS
+
+core     LINE 688/688 = 1.0000 | BRANCH 326/326 = 1.0000
+okhttp   LINE  32/32  = 1.0000 | BRANCH  18/18  = 1.0000
+jdkhttp  LINE  33/33  = 1.0000 | BRANCH  18/18  = 1.0000
+AGG      LINE 753/753 = 1.0000 | BRANCH 362/362 = 1.0000
+```
+
+合计 208 tests（182+15+11）全绿；三模块 JaCoCo 门禁（行+分支 ≥98%）通过，聚合 **100.00% / 100.00%**。
+
+### 5. 提交
+
+```
+ab986e6 test: 故障注入场景覆盖（协议层+双适配器网络层）；docs: README 补第二适配器与 groupId 一致化
+```
