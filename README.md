@@ -5,7 +5,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 
 - 协议真源：[crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md)（v0.3-reviewed）+ [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/sdk/wop-sdk-spec.md)（v1.0-ratified）
 - 向量真源：[crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json)（本仓 fixture 为字节级副本，禁手改）
-- JDK 17+，Maven 多模块（`groupId: com.wopplatform`，版本 0.1.0）
+- JDK 17+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.1.0）
 - 运行时依赖仅 BouncyCastle（国密 SM2/SM3/SM4 唯一路径）
 
 | 模块 | 说明 |
@@ -20,14 +20,21 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 
 ```xml
 <dependency>
-  <groupId>com.wopplatform</groupId>
+  <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-core</artifactId>
   <version>0.1.0</version>
 </dependency>
-<!-- 可选适配器（二选一） -->
+
+<!-- 可选适配器（二选一）：okhttp 依赖 scope=provided（商户自带版本） / jdkhttp 零额外依赖 -->
 <dependency>
-  <groupId>com.wopplatform</groupId>
+  <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
+  <version>0.1.0</version>
+</dependency>
+<!-- 或 -->
+<dependency>
+  <groupId>com.wanlianyida</groupId>
+  <artifactId>wop-sdk-jdkhttp</artifactId>
   <version>0.1.0</version>
 </dependency>
 ```

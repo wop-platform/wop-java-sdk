@@ -5,8 +5,9 @@ core (signing / digest / L2 digital envelope / verify & decrypt) so merchants ca
 integrate securely without understanding canonicalRequest, suite derivation or
 wire byte formats.
 
-- Protocol sources: `crypto-strategy-spec` v0.3-reviewed + `wop-sdk-spec` v1.0-ratified
-- JDK 17+, Maven multi-module (`groupId: com.wopplatform`, version 0.1.0)
+- Protocol sources: [crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md) (v0.3-reviewed) + [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/sdk/wop-sdk-spec.md) (v1.0-ratified)
+- Vector source of truth: [crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json) (byte-level copy in this repo, never edit by hand)
+- JDK 17+, Maven multi-module (`groupId: com.wanlianyida`, version 0.1.0)
 - Single runtime dependency: BouncyCastle (the only supported path for SM2/SM3/SM4)
 
 | Module | Description |
@@ -21,14 +22,21 @@ Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
 
 ```xml
 <dependency>
-  <groupId>com.wopplatform</groupId>
+  <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-core</artifactId>
   <version>0.1.0</version>
 </dependency>
-<!-- Optional adapter (pick one) -->
+
+<!-- Optional adapter (pick one): okhttp dependency is provided (bring your own) / jdkhttp has zero extra dependencies -->
 <dependency>
-  <groupId>com.wopplatform</groupId>
+  <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
+  <version>0.1.0</version>
+</dependency>
+<!-- or -->
+<dependency>
+  <groupId>com.wanlianyida</groupId>
+  <artifactId>wop-sdk-jdkhttp</artifactId>
   <version>0.1.0</version>
 </dependency>
 ```
