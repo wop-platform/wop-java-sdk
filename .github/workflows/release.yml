@@ -8,8 +8,9 @@ name: Release
 # 凭证形态不变：Portal 用户令牌 + GPG 签名。
 #
 # 组织级前置条件（一次性，未配置则本 workflow 在凭证步骤明确报错，不会半发布）：
-#   1. 在 https://central.sonatype.com 注册账号并验证 namespace `com.wanlianyida`
-#      （通过 GitHub 公开仓库 wop-platform/wop-java-sdk 校验）
+#   1. 在 https://central.sonatype.com 注册账号，namespace `com.wanlianyida`
+#      经域名 DNS TXT 验证（控制 wanlianyida.com 域名，按 Portal 指引添加 TXT 记录；
+#      GitHub 验证仅适用 io.github.* 形态，不适用于本 groupId）
 #   2. Portal 生成用户令牌（Account → Generate User Token），
 #      存为 GitHub Secret：MAVEN_CENTRAL_TOKEN，格式 `<token-user>:<token-pass>`
 #   3. 生成发布专用 GPG 密钥对，公钥上传到 Central Portal（Keys 页）；
@@ -94,7 +95,8 @@ jobs:
       - name: Build, test and enforce coverage gate（与 ci.yml 相同命令）
         run: mvn -B -ntp verify
 
-      - name: Publish to Maven Central（严格排在测试全绿之后）
+      - name: Publish to Maven Central（严格排在测试全绿之后；autoPublish=false：
+          上传后停在 Portal 待发布状态，人工核对构件/签名/坐标后手动 Publish）
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: mvn -B -ntp -P release -DskipTests deploy

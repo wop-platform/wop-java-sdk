@@ -187,3 +187,33 @@ AGG      LINE 753/753 = 1.0000 | BRANCH 362/362 = 1.0000
 ```
 ab986e6 test: 故障注入场景覆盖（协议层+双适配器网络层）；docs: README 补第二适配器与 groupId 一致化
 ```
+
+---
+
+## 增量轮次 3（2026-08-29，发版准备）
+
+### 1. 契约对齐（网关仓，用户授权）
+
+- `gtsp-wop-gateway` commit `6302c0c`：`scripts/poc/new-gateway-access-contract.md` §6.4 三处 `x-wop-content-sha256` → `x-wop-content-digest`（D2 冻结格式 + v18 变更记录）
+- 同仓 commit `4113a38`：`docs/design.md` 三处同源残留同步对齐（7.1 头表 / 7.3 signedHeaders / 3.1 回写清单）
+- 网关仓 `docs/`+`scripts/` 旧头名清零（变更记录表保留历史名仅作记录）
+
+### 2. 故障注入推广
+
+- `docs/fault-injection-playbook.md`（commit `74c2642`）：I7 判定基线 + P1-P7 协议层 / N1-N6 网络层场景矩阵 + 五语言工具对照 + 四条环境稳定性教训，供其余五仓直接套用
+
+### 3. 发版前检查结论
+
+| 检查项 | 状态 |
+|---|---|
+| 构建链 | `mvn -P release -DskipTests package` 预验通过：三模块 sources/javadoc jar 全部生成 |
+| 坐标 | 父/子 pom 全部 `com.wanlianyida`，无旧值残留 |
+| Central 元数据 | name/description/url/licenses/developers/scm 齐备 |
+| release profile | source 3.4.0 / javadoc 3.12.0（doclint none）/ gpg 3.2.8（loopback）/ central-publishing 0.11.0 |
+| release.yml | tag-版本一致性校验、GPG 导入、Secrets 注入 settings.xml、测试绿后 deploy |
+| remote | origin = git@github.com:wop-platform/wop-java-sdk.git 已配置 |
+| 测试/覆盖率 | 208 tests 全绿；聚合行/分支 100.00% |
+
+**已按用户决策修正**：`autoPublish` true→false（首次发版人工核对后手动 Publish）；release.yml 注释验证路径改为 DNS TXT（原注释写的 GitHub 仓库验证不适用于 com.wanlianyida）。
+
+**发版前唯一阻断项**：Central Portal namespace `com.wanlianyida` 的 DNS TXT 验证（需 wanlianyida.com 域名控制权，操作指引见会话回复）。

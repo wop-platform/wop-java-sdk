@@ -209,7 +209,8 @@
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
-              <autoPublish>true</autoPublish>
+              <!-- 首次发版策略：false = 上传后停在 Portal 待发布，人工核对后手动 Publish -->
+              <autoPublish>false</autoPublish>
             </configuration>
           </plugin>
         </plugins>
