@@ -7,3 +7,15 @@ target/
 .DS_Store
 dependency-reduced-pom.xml
 .flattened-pom.xml
+
+# 工厂治理层入库（MISSION/forge→hosting(ADR-008)/状态机/prompts/guard/tests；
+# hosting.env 为租户平台配置，随仓共享，令牌走 shell profile 不入库）。
+# 不入库：运行时产物与机器态
+.factory/artifacts/
+.factory/locks/
+.factory/worktrees/
+.factory/metrics/
+.factory/var/
+.factory/.pytest_cache/
+.factory/regression/**/out/
+.factory/**/__pycache__/
