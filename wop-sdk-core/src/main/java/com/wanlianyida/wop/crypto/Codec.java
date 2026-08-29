@@ -109,17 +109,13 @@ public final class Codec {
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
     }
 
-    /** 字母表字符 → 6 位值（A-Z=0-25, a-z=26-51, 0-9=52-61, '-'=62, '_'=63）；调用前须已过 {@link #isB64UrlChar}。 */
+    /** base64url 字母表（A-Z=0-25, a-z=26-51, 0-9=52-61, '-'=62, '_'=63）。 */
+    private static final String B64URL_ALPHABET =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+    /** 字母表字符 → 6 位值（查表，位置即值）；字母表外（含 &gt;'z'）返回 -1，
+     *  调用前须已过 {@link #isB64UrlChar}，-1 仅作防御哨兵。 */
     private static int b64UrlCharIndex(char c) {
-        if (c >= 'A' && c <= 'Z') {
-            return c - 'A';              // 0-25
-        }
-        if (c >= 'a' && c <= 'z') {
-            return c - 'a' + 26;         // 26-51
-        }
-        if (c >= '0' && c <= '9') {
-            return c - '0' + 52;         // 52-61
-        }
-        return c == '-' ? 62 : 63;       // '-' / '_'（调用前已过字母表校验）
+        return B64URL_ALPHABET.indexOf(c);
     }
 }

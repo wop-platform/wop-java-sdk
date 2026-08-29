@@ -13,6 +13,7 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -70,6 +71,19 @@ class SignatureStrategyVectorTest {
         // 消息被改同样拒绝
         byte[] sig2 = Codec.b64UrlDecode(vector.path("expectedSigB64u").asText());
         assertFalse(RsaPkcs1SignatureStrategy.INSTANCE.verify(Codec.utf8("tampered"), sig2, pub));
+    }
+
+    @Test
+    void rsaVerifyLengthMismatchThrowsWrapped() {
+        // A2 负向量：签名长度 != 模长（SunRsaSign engineVerify 前置守卫抛 SignatureException）
+        // → 策略包装为 CryptoException（I7：调用方只见统一模糊异常）
+        var vector = TestVectors.firstById("signature", "rsa3072-sign");
+        byte[] msg = Codec.utf8(vector.path("message").asText());
+        PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072);
+        byte[] shortSig = new byte[64];
+        CryptoException ex = assertThrows(CryptoException.class,
+                () -> RsaPkcs1SignatureStrategy.INSTANCE.verify(msg, shortSig, pub));
+        assertTrue(ex.getMessage().contains("RSA 验签执行失败"));
     }
 
     @Test

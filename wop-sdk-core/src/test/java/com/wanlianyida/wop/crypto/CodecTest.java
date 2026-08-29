@@ -139,4 +139,16 @@ class CodecTest {
         assertArrayEquals(new byte[]{1, 2, 3}, Codec.concat(a, b));
         assertTrue(Arrays.equals(new byte[0], Codec.concat(new byte[0], new byte[0])));
     }
+
+    /** F7：base64url 安全字母表独有字符 '-'(62)/'_'(63) 的查表路径（b64UrlCharIndex 仅被尾随位校验触达；
+     *  向量集只覆盖字母数字）。两字符低位均非零，rem==3 尾组必须拒收（RFC 4648 §3.5 非规范编码）。 */
+    @Test
+    void b64UrlUrlSafeAlphabetTrailingBitsRejected() {
+        IllegalArgumentException dash = assertThrows(IllegalArgumentException.class,
+                () -> Codec.b64UrlDecode("AB-"));
+        assertTrue(dash.getMessage().contains("尾随位非零"));
+        IllegalArgumentException underscore = assertThrows(IllegalArgumentException.class,
+                () -> Codec.b64UrlDecode("AB_"));
+        assertTrue(underscore.getMessage().contains("尾随位非零"));
+    }
 }
