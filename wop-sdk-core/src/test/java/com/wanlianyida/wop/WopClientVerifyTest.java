@@ -173,27 +173,30 @@ class WopClientVerifyTest {
     }
 
     @Test
-    void signatureWithPaddingCharFails() {
-        // F7 负向量：带 = 的 base64url 签名必须拒（归入模糊类）
+    void signatureWithPaddingCharFailsExplicitly() {
+        // F7 负向量 + interop n06 裁决：带 '=' 的 base64url 签名是公开结构知识，
+        // 协议类明确拒绝（解析层格式错误），非验签模糊
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         SignHeader.Parsed parsed = SignHeader.parse(resp.headers().get("x-wop-sign"));
         resp.headers().put("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/" + String.join(";", parsed.signedHeaders())
                 + "/" + parsed.signature() + "=");
-        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED,
-                client.verifyResponse(resp.headers(), body, "/p").reason());
+        VerifyResult result = client.verifyResponse(resp.headers(), body, "/p");
+        assertEquals(VerifyResult.Reason.INVALID_SIGN_HEADER, result.reason());
+        assertTrue(result.message().contains("格式错误") && result.detail() != null, result.message());
     }
 
     @Test
-    void crossFamilySignatureFails() {
-        // RSA 套件 + SM2 形态签名（86 字符）→ 模糊拒绝
+    void crossFamilySignatureLengthFailsExplicitly() {
+        // RSA 套件 + 86 字符（64B，SM2 形态）签名 → 定长前置校验，协议类明确拒绝（interop n07/n08 同族）
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         SignHeader.Parsed parsed = SignHeader.parse(resp.headers().get("x-wop-sign"));
         resp.headers().put("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/" + String.join(";", parsed.signedHeaders())
                 + "/Si7Uw5eZm0Kii3BuIRLXwMGGOxkwFria8ypcVYXnReV376EVgV0TOkQfm21NUnJZNGM-fV0d0fMF23B0Bm3TFw");
-        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED,
-                client.verifyResponse(resp.headers(), body, "/p").reason());
+        VerifyResult result = client.verifyResponse(resp.headers(), body, "/p");
+        assertEquals(VerifyResult.Reason.INVALID_SIGN_HEADER, result.reason());
+        assertTrue(result.message().contains("定长"));
     }
 
     @Test
@@ -324,7 +327,10 @@ class WopClientVerifyTest {
 
         PlatformResponse resp = RSA_RIG.respond("/p", plain, true);
         byte[] wire = resp.wire().clone();
-        wire[wire.length - 3] ^= 0x01;
+        // 随机 DEK 下尾段 base64url 字符不定，^0x01 有 ~9% 概率翻出字母表外（A→@ 等），
+        // 落点漂移到信封解码失败（INVALID_ENCRYPTED_BODY）而非解密失败。改为替换成
+        // 确定的另一合法字母表字符（'B'↔'C'），保证直达 AES-GCM 解密 → 确定性 DECRYPT_FAILED。
+        wire[wire.length - 3] = wire[wire.length - 3] == 'B' ? (byte) 'C' : (byte) 'B';
         // 重算 digest 并重签，直达解密层
         resp.headers().put("x-wop-content-digest", ContentDigest.build(RSA, wire));
         reSignWith(resp.headers(), "/p", List.of(
@@ -409,13 +415,37 @@ class WopClientVerifyTest {
         assertTrue(result.ok(), () -> result.toString());
         assertArrayEquals(plain, result.plaintext());
 
-        // 63B 签名 → 模糊拒绝（定长前置）
+        // 63B 签名 → 定长前置校验，协议类明确拒绝（interop n07）
         SignHeader.Parsed parsed = SignHeader.parse(resp.headers().get("x-wop-sign"));
         byte[] sig = Codec.b64UrlDecode(parsed.signature());
         resp.headers().put("x-wop-sign", SignHeader.build("WOP-SM2-SM3", 1800, parsed.signedHeaders(),
                 Codec.b64UrlEncode(java.util.Arrays.copyOfRange(sig, 0, 63))));
-        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED,
+        assertEquals(VerifyResult.Reason.INVALID_SIGN_HEADER,
                 sm2Client.verifyCallback(resp.headers(), resp.wire(), "/cb").reason());
+    }
+
+    /** I7 韧性：验签策略内部抛 RuntimeException（而非返回 false）时不得外泄异常，须模糊化为 SIGNATURE_FAILED。
+     *  注入：合法构建后反射替换 platformPublicKey 为 RSA 公钥，SM2 曲线守卫（toPublicParams）抛
+     *  IllegalArgumentException → 策略包装 CryptoException → verifyInbound catch。 */
+    @Test
+    void signatureStrategyRuntimeExceptionFailsVaguely() throws Exception {
+        String sm2Priv = TestVectors.keys("sm2").path("privateDB64").asText();
+        String sm2Pub = TestVectors.keys("sm2").path("publicPointB64").asText();
+        WopClient sm2Client = WopClient.builder().appKey("app_sm2").suite("WOP-SM2-SM3")
+                .merchantPrivateKey(sm2Priv).platformPublicKey(sm2Pub).build();
+        PlatformRig rig = new PlatformRig("WOP-SM2-SM3", sm2Priv, sm2Pub);
+        byte[] plain = Codec.utf8("{\"sm\":true}");
+        PlatformResponse resp = rig.respond("/cb", plain, false);
+
+        java.lang.reflect.Field keyField = WopClient.class.getDeclaredField("platformPublicKey");
+        keyField.setAccessible(true);
+        keyField.set(sm2Client, KeyCodec.parsePublicKey(
+                TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA));
+
+        VerifyResult result = sm2Client.verifyCallback(resp.headers(), resp.wire(), "/cb");
+        assertFalse(result.ok());
+        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED, result.reason());
+        assertNull(result.detail(), "策略内部异常不应泄露细节（I7）");
     }
 
     // ==================== 辅助：平台私钥重签 ====================

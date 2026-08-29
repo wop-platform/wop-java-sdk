@@ -130,6 +130,12 @@ public final class AlgorithmSuite {
         return signature;
     }
 
+
+    /** 线上签名定长（F7）：RSA = 密钥位数字节数（3072→384B / 4096→512B）；SM2 = 裸 r‖s 64B（D9）。 */
+    public int signatureLength() {
+        return "SM2".equals(keyAlgorithm) ? 64 : keyLength / 8;
+    }
+
     public KeyEncryptStrategy keyEncrypt() {
         return keyEncrypt;
     }

@@ -29,10 +29,16 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
 
     @Override
     public byte[] encrypt(byte[] plainKey, PublicKey publicKey) {
+        return encrypt(plainKey, publicKey, RANDOM);
+    }
+
+    /** 加密随机 k 取自注入源（确定性钩子）。 */
+    @Override
+    public byte[] encrypt(byte[] plainKey, PublicKey publicKey, SecureRandom random) {
         try {
             ECPublicKeyParameters params = Sm2Support.toPublicParams(publicKey);
             SM2Engine engine = new SM2Engine(SM2Engine.Mode.C1C3C2);
-            engine.init(true, new ParametersWithRandom(params, RANDOM));
+            engine.init(true, new ParametersWithRandom(params, random));
             return engine.processBlock(plainKey, 0, plainKey.length);
         } catch (Exception e) {
             throw new CryptoException("KEY_ENCRYPT", ALGORITHM, "SM2 加密失败", e);
