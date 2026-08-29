@@ -31,8 +31,14 @@ public final class Aes256GcmStrategy implements MessageEncryptStrategy {
 
     @Override
     public CipherResult encrypt(byte[] plain, byte[] key) {
+        return encrypt(plain, key, RANDOM);
+    }
+
+    /** IV 取自注入源（确定性钩子；I4 生成点仍在策略内）。 */
+    @Override
+    public CipherResult encrypt(byte[] plain, byte[] key, SecureRandom random) {
         byte[] iv = new byte[IV_LENGTH];
-        RANDOM.nextBytes(iv);
+        random.nextBytes(iv);
         return encryptForVector(plain, key, iv);
     }
 

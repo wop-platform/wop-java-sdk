@@ -21,6 +21,7 @@ public record VerifyResult(boolean ok, byte[] plaintext, Reason reason, String d
         MISSING_SIGN_HEADER("缺少 x-wop-sign 请求头"),
         INVALID_SIGN_HEADER("x-wop-sign 格式错误"),
         UNSUPPORTED_SUITE("不支持的算法组合"),
+        SUITE_MISMATCH("响应套件与客户端配置不符"),
         INVALID_ENCRYPT_HEADER("x-wop-encrypt 格式错误"),
         MISSING_SIGNED_HEADER("signedHeaders 声明不完整"),
         MISSING_HEADER("签名的请求头缺失"),

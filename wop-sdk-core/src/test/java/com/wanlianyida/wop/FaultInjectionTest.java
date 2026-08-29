@@ -167,18 +167,18 @@ class FaultInjectionTest {
     }
 
     @Test
-    void crossSuiteDeclaredInResponseFailsVaguely() {
-        // 故障：对端声明 SM2 套件但本客户端平台公钥为 RSA——族不匹配必须落模糊验签失败
+    void crossSuiteDeclaredInResponseFailsExplicitly() {
+        // 故障：对端声明 SM2 套件但本客户端配置为 RSA——声明与配置均为公开结构知识，
+        // 协议类明确拒绝（interop 合同 n11），不进入密钥参与的模糊验签
         byte[] body = Codec.utf8("{}");
         Map<String, String> headers = platformResponse("/p", body, false, null);
         wireOf(headers);
         SignHeader.Parsed parsed = SignHeader.parse(headers.get("x-wop-sign"));
-        // 用 RSA 平台私钥对同一 canonical 以"SM2 套件声明"重发（签名值不变，头声明被篡改为 SM2）
         headers.put("x-wop-sign", SignHeader.build("WOP-SM2-SM3", 1800, parsed.signedHeaders(),
                 parsed.signature()));
         VerifyResult result = client.verifyResponse(headers, body, "/p");
-        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED, result.reason());
-        assertEquals("签名验证失败", result.message());
+        assertEquals(VerifyResult.Reason.SUITE_MISMATCH, result.reason());
+        assertTrue(result.message().contains("不符"));
     }
 
     @Test
@@ -194,17 +194,20 @@ class FaultInjectionTest {
     }
 
     @Test
-    void urlEncodedSignaturePollutionFails() {
-        // 故障：中间层对签名段做了 URL 编码（含 %3D/%2B 形态）→ 严格 base64url 拒绝，归模糊
+    void urlEncodedSignaturePollutionFailsExplicitly() {
+        // P6 拉齐（interop n06 裁决）：签名段携带 '=' 等 b64url 非法字符属公开结构知识，
+        // 协议类明确拒绝（格式类错误码），非验签模糊
         byte[] body = Codec.utf8("{}");
         Map<String, String> headers = platformResponse("/p", body, false, null);
         wireOf(headers);
         SignHeader.Parsed parsed = SignHeader.parse(headers.get("x-wop-sign"));
         headers.put("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/" + String.join(";", parsed.signedHeaders())
                 + "/" + parsed.signature().substring(0, 40) + "%3D");
-        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED,
-                client.verifyResponse(headers, body, "/p").reason());
+        VerifyResult result = client.verifyResponse(headers, body, "/p");
+        assertEquals(VerifyResult.Reason.INVALID_SIGN_HEADER, result.reason());
+        assertTrue(result.message().contains("非法字符"));
     }
+
 
     @Test
     void mixedCaseInboundHeaderNamesTolerated() {

@@ -1,6 +1,7 @@
 package com.wanlianyida.wop.crypto.strategies;
 import com.wanlianyida.wop.crypto.CryptoException;
 import com.wanlianyida.wop.crypto.Codec;
+import com.wanlianyida.wop.InteropConformanceTest;
 import com.wanlianyida.wop.crypto.TestVectors;
 import org.junit.jupiter.api.Test;
 
@@ -97,6 +98,44 @@ class MessageEncryptVectorTest {
         CipherResult c = Sm4GcmStrategy.INSTANCE.encrypt(plain, sm4Key);
         CipherResult d = Sm4GcmStrategy.INSTANCE.encrypt(plain, sm4Key);
         assertNotEquals(Codec.hexLower(c.iv()), Codec.hexLower(d.iv()));
+    }
+
+    @Test
+    void injectedRandomDrivesIvDeterministically() {
+        // interop 确定性钩子：同流两次加密产出相同 IV/密文（IV 仍由策略生成，I4 生成点不变）
+        byte[] key = new byte[32];
+        byte[] plain = Codec.utf8("deterministic");
+        byte[] stream = new byte[64];
+        for (int i = 0; i < stream.length; i++) {
+            stream[i] = (byte) i;
+        }
+        CipherResult a = Aes256GcmStrategy.INSTANCE.encrypt(plain, key, new InteropConformanceTest.StreamRandom(stream));
+        CipherResult b = Aes256GcmStrategy.INSTANCE.encrypt(plain, key, new InteropConformanceTest.StreamRandom(stream));
+        assertArrayEquals(a.iv(), b.iv());
+        assertArrayEquals(a.cipher(), b.cipher());
+
+        byte[] sm4Key = new byte[16];
+        CipherResult c = Sm4GcmStrategy.INSTANCE.encrypt(plain, sm4Key, new InteropConformanceTest.StreamRandom(stream));
+        CipherResult d = Sm4GcmStrategy.INSTANCE.encrypt(plain, sm4Key, new InteropConformanceTest.StreamRandom(stream));
+        assertArrayEquals(c.iv(), d.iv());
+        assertArrayEquals(c.cipher(), d.cipher());
+    }
+
+    @Test
+    void spiDefaultInjectFallbackDelegatesToTwoArg() {
+        // SPI 默认退路：未覆写注入入口的策略回退 2-arg 自管随机
+        MessageEncryptStrategy fallback = new MessageEncryptStrategy() {
+            @Override public CipherResult encrypt(byte[] plain, byte[] key) {
+                return new CipherResult(plain.clone(), new byte[12]);
+            }
+            @Override public byte[] decrypt(byte[] cipher, byte[] iv, byte[] key) { return cipher; }
+            @Override public String algorithmName() { return "stub"; }
+            @Override public int keyLength() { return 0; }
+            @Override public int ivLength() { return 0; }
+        };
+        CipherResult viaDefault = fallback.encrypt(Codec.utf8("x"), new byte[0],
+                new java.security.SecureRandom());
+        assertArrayEquals(Codec.utf8("x"), viaDefault.cipher());
     }
 
     @Test

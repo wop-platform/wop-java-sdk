@@ -1,5 +1,7 @@
 package com.wanlianyida.wop.crypto;
 
+import com.wanlianyida.wop.InteropConformanceTest;
+import com.wanlianyida.wop.crypto.strategies.KeyEncryptStrategy;
 import com.wanlianyida.wop.crypto.strategies.RsaOaepKeyEncryptStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sm2KeyEncryptStrategy;
 import org.junit.jupiter.api.Test;
@@ -118,6 +120,37 @@ class KeyEncryptVectorTest {
                 () -> Sm2KeyEncryptStrategy.INSTANCE.decrypt(new byte[100], rsaPriv));
         assertThrows(CryptoException.class,
                 () -> Sm2KeyEncryptStrategy.INSTANCE.encrypt(new byte[10], rsaPub));
+    }
+
+    @Test
+    void injectedRandomWrapUnwrapRoundtrip() {
+        // interop 确定性钩子：注入源包装的密文可正常解包；同流两次包装字节一致（OAEP seed 取自流）
+        PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA3072);
+        PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072);
+        byte[] stream = new byte[96];
+        for (int i = 0; i < stream.length; i++) {
+            stream[i] = (byte) (i * 3 + 1);
+        }
+        byte[] payload = Codec.utf8("AES-256-GCM$aaaa$bbbb");
+        byte[] wrapped = RsaOaepKeyEncryptStrategy.INSTANCE.encrypt(payload, pub,
+                new InteropConformanceTest.StreamRandom(stream));
+        byte[] wrapped2 = RsaOaepKeyEncryptStrategy.INSTANCE.encrypt(payload, pub,
+                new InteropConformanceTest.StreamRandom(stream));
+        assertArrayEquals(wrapped, wrapped2, "同流两次 OAEP 包装应字节一致");
+        assertArrayEquals(payload, RsaOaepKeyEncryptStrategy.INSTANCE.decrypt(wrapped, priv));
+    }
+
+    @Test
+    void spiDefaultInjectFallbackDelegatesToTwoArg() {
+        // SPI 默认退路：未覆写注入入口的策略回退 2-arg
+        KeyEncryptStrategy fallback = new KeyEncryptStrategy() {
+            @Override public byte[] encrypt(byte[] plainKey, PublicKey publicKey) { return plainKey.clone(); }
+            @Override public byte[] decrypt(byte[] cipherText, PrivateKey privateKey) { return cipherText; }
+            @Override public String algorithmName() { return "stub"; }
+        };
+        PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072);
+        byte[] out = fallback.encrypt(Codec.utf8("k"), pub, null);
+        assertArrayEquals(Codec.utf8("k"), out);
     }
 
     @Test

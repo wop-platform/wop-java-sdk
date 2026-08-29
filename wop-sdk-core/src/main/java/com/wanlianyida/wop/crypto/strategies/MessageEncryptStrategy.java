@@ -8,6 +8,14 @@ public interface MessageEncryptStrategy {
 
     CipherResult encrypt(byte[] plain, byte[] key);
 
+    /**
+     * 指定随机源加密：IV 仍由策略内唯一生成点产出（I4），但字节取自注入源。
+     * <p>确定性钩子（interop 联调合同）：实现未覆写时退回自管 CSPRNG 的 {@link #encrypt(byte[], byte[])}。
+     */
+    default CipherResult encrypt(byte[] plain, byte[] key, java.security.SecureRandom random) {
+        return encrypt(plain, key);
+    }
+
     byte[] decrypt(byte[] cipher, byte[] iv, byte[] key);
 
     String algorithmName();

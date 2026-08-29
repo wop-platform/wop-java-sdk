@@ -173,27 +173,30 @@ class WopClientVerifyTest {
     }
 
     @Test
-    void signatureWithPaddingCharFails() {
-        // F7 负向量：带 = 的 base64url 签名必须拒（归入模糊类）
+    void signatureWithPaddingCharFailsExplicitly() {
+        // F7 负向量 + interop n06 裁决：带 '=' 的 base64url 签名是公开结构知识，
+        // 协议类明确拒绝（解析层格式错误），非验签模糊
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         SignHeader.Parsed parsed = SignHeader.parse(resp.headers().get("x-wop-sign"));
         resp.headers().put("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/" + String.join(";", parsed.signedHeaders())
                 + "/" + parsed.signature() + "=");
-        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED,
-                client.verifyResponse(resp.headers(), body, "/p").reason());
+        VerifyResult result = client.verifyResponse(resp.headers(), body, "/p");
+        assertEquals(VerifyResult.Reason.INVALID_SIGN_HEADER, result.reason());
+        assertTrue(result.message().contains("格式错误") && result.detail() != null, result.message());
     }
 
     @Test
-    void crossFamilySignatureFails() {
-        // RSA 套件 + SM2 形态签名（86 字符）→ 模糊拒绝
+    void crossFamilySignatureLengthFailsExplicitly() {
+        // RSA 套件 + 86 字符（64B，SM2 形态）签名 → 定长前置校验，协议类明确拒绝（interop n07/n08 同族）
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         SignHeader.Parsed parsed = SignHeader.parse(resp.headers().get("x-wop-sign"));
         resp.headers().put("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/" + String.join(";", parsed.signedHeaders())
                 + "/Si7Uw5eZm0Kii3BuIRLXwMGGOxkwFria8ypcVYXnReV376EVgV0TOkQfm21NUnJZNGM-fV0d0fMF23B0Bm3TFw");
-        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED,
-                client.verifyResponse(resp.headers(), body, "/p").reason());
+        VerifyResult result = client.verifyResponse(resp.headers(), body, "/p");
+        assertEquals(VerifyResult.Reason.INVALID_SIGN_HEADER, result.reason());
+        assertTrue(result.message().contains("定长"));
     }
 
     @Test
@@ -409,12 +412,12 @@ class WopClientVerifyTest {
         assertTrue(result.ok(), () -> result.toString());
         assertArrayEquals(plain, result.plaintext());
 
-        // 63B 签名 → 模糊拒绝（定长前置）
+        // 63B 签名 → 定长前置校验，协议类明确拒绝（interop n07）
         SignHeader.Parsed parsed = SignHeader.parse(resp.headers().get("x-wop-sign"));
         byte[] sig = Codec.b64UrlDecode(parsed.signature());
         resp.headers().put("x-wop-sign", SignHeader.build("WOP-SM2-SM3", 1800, parsed.signedHeaders(),
                 Codec.b64UrlEncode(java.util.Arrays.copyOfRange(sig, 0, 63))));
-        assertEquals(VerifyResult.Reason.SIGNATURE_FAILED,
+        assertEquals(VerifyResult.Reason.INVALID_SIGN_HEADER,
                 sm2Client.verifyCallback(resp.headers(), resp.wire(), "/cb").reason());
     }
 

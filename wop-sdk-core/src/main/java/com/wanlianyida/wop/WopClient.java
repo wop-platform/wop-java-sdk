@@ -48,15 +48,21 @@ public final class WopClient {
     private final PublicKey platformPublicKey;
     private final LongSupplier clock;
     private final Supplier<String> nonceGen;
-    private final SecureRandom random = new SecureRandom();
+    private final SecureRandom random;
 
     WopClient(Config config, LongSupplier clock, Supplier<String> nonceGen) {
+        this(config, clock, nonceGen, new SecureRandom());
+    }
+
+    /** 全量确定性钩子（interop 联调合同）：时钟/nonce/随机源可注入；生产走 Builder 默认 CSPRNG。 */
+    WopClient(Config config, LongSupplier clock, Supplier<String> nonceGen, SecureRandom random) {
         this.config = config;
         this.suite = config.suite();
         this.merchantPrivateKey = KeyCodec.parsePrivateKey(config.merchantPrivateKey(), suite);
         this.platformPublicKey = KeyCodec.parsePublicKey(config.platformPublicKey(), suite);
         this.clock = clock;
         this.nonceGen = nonceGen;
+        this.random = random;
     }
 
     public static Builder builder() {
@@ -99,14 +105,15 @@ public final class WopClient {
         headers.put(HEADER_NONCE, nonceGen.get());
 
         if (level == SecurityLevel.L2) {
-            // F5：DEK key 由 CSPRNG 生成；IV 由策略唯一生成点产出（I4），随密文同源携带
+            // F5：DEK key 由 CSPRNG 生成；IV 由策略唯一生成点产出（I4），随密文同源携带。
+            // 随机流消费顺序（interop 合同）：[CEK][IV][wrap 填充随机（OAEP seed/SM2 k）]
             byte[] dekKey = new byte[suite.messageEncrypt().keyLength()];
             random.nextBytes(dekKey);
-            CipherResult result = suite.messageEncrypt().encrypt(body, dekKey);
+            CipherResult result = suite.messageEncrypt().encrypt(body, dekKey, random);
             wireBody = EncryptedEnvelope.wrap(Codec.b64UrlEncode(result.cipher()));
             String dekPayload = DekPayload.encode(
                     new DekPayload(suite.expectedDekAlg(), dekKey, result.iv()));
-            byte[] wrapped = suite.keyEncrypt().encrypt(Codec.utf8(dekPayload), platformPublicKey);
+            byte[] wrapped = suite.keyEncrypt().encrypt(Codec.utf8(dekPayload), platformPublicKey, random);
             headers.put(HEADER_ENCRYPT, EncryptHeader.buildL2(Codec.b64UrlEncode(wrapped)));
         }
 
@@ -165,12 +172,16 @@ public final class WopClient {
             return VerifyResult.fail(VerifyResult.Reason.INVALID_SIGN_HEADER, e.getMessage());
         }
 
-        // 2. 套件（支持类，明确）
+        // 2. 套件（支持类，明确）+ 响应/配置一致性（公开结构知识，明确——interop n11）
         AlgorithmSuite inboundSuite;
         try {
             inboundSuite = AlgorithmSuite.parse(sign.securityReq());
         } catch (WopSuiteException e) {
             return VerifyResult.fail(VerifyResult.Reason.UNSUPPORTED_SUITE, e.getMessage());
+        }
+        if (!inboundSuite.securityReq().equals(suite.securityReq())) {
+            return VerifyResult.fail(VerifyResult.Reason.SUITE_MISMATCH,
+                    "响应声明 " + inboundSuite.securityReq() + " 与客户端配置 " + suite.securityReq() + " 不符");
         }
 
         // 3. 加密指令（解析类，明确；头缺席 = L0）
@@ -208,10 +219,22 @@ public final class WopClient {
                 sign.protocolVersion() + "/" + sign.expiredSeconds(), "POST", path, "",
                 CanonicalRequest.canonicalHeaders(signed));
 
-        // 6. 验签（先验签后解密，I2；失败对外模糊，I7）
-        boolean verified;
+        // 6. 验签（先验签后解密，I2；失败对外模糊，I7）。
+        //    前置结构校验（公开协议知识，明确——interop n06/n07/n08）：签名段严格 b64url + 套件定长，
+        //    与密钥参与的验签失败（模糊）分离。
+        byte[] signature;
         try {
-            byte[] signature = Codec.b64UrlDecode(sign.signature());
+            signature = Codec.b64UrlDecode(sign.signature());
+        } catch (RuntimeException e) {
+            return VerifyResult.fail(VerifyResult.Reason.INVALID_SIGN_HEADER, e.getMessage());
+        }
+        if (signature.length != inboundSuite.signatureLength()) {
+            return VerifyResult.fail(VerifyResult.Reason.INVALID_SIGN_HEADER,
+                    "签名长度 " + signature.length + " 字节与套件 " + inboundSuite.securityReq()
+                            + " 定长 " + inboundSuite.signatureLength() + " 字节不符");
+        }
+        boolean verified = false;
+        try {
             verified = inboundSuite.signature().verify(Codec.utf8(canonical), signature, platformPublicKey);
         } catch (RuntimeException e) {
             verified = false;
