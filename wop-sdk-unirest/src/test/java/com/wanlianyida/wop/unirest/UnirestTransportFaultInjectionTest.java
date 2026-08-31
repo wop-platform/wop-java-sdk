@@ -31,6 +31,7 @@ import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -292,6 +293,111 @@ class UnirestTransportFaultInjectionTest {
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
                 new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("响应体超过"), ex.getMessage());
+    }
+
+    @Test
+    void duplicateContentLengthConsistentAccepted() {
+        // RFC 9110 §8.6：重复 CL 解析后数值一致（"0100" 等价 "100"）是合法的，不得误拒
+        Headers headers = new Headers();
+        headers.add("Content-Length", "100");
+        headers.add("Content-Length", "0100");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[100]), headers));
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+        assertEquals(200, response.statusCode());
+        assertEquals(100, response.body().length);
+    }
+
+    @Test
+    void duplicateContentLengthInconsistentRejected() {
+        // 重复 CL 值不一致是消息走私向量（响应拆分），必须显式拒绝而非静默取其一
+        Headers headers = new Headers();
+        headers.add("Content-Length", "100");
+        headers.add("Content-Length", "0");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[10]), headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("不一致"), ex.getMessage());
+    }
+
+    @Test
+    void signedContentLengthRejected() {
+        // Long.parseLong 接受 "+5"，但 RFC 9110 §8.6 的 CL 语法仅 1*DIGIT，带符号即畸形
+        Headers headers = new Headers();
+        headers.add("Content-Length", "+5");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[5]), headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
+    }
+
+    @Test
+    void oversizedNumericContentLengthRejected() {
+        // 20 位纯数字超出 long 表示范围：语法合法但数值不可表示，按畸形落界
+        Headers headers = new Headers();
+        headers.add("Content-Length", "99999999999999999999");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[5]), headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
+    }
+
+    @Test
+    void blankContentLengthRejected() {
+        // 空白值 CL：trim 后为空串，属畸形而非"无声明"（后者会被走私利用）
+        Headers headers = new Headers();
+        headers.add("Content-Length", "  ");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[5]), headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
+    }
+
+    @Test
+    void precheckRejectsBeforeReadingBody() {
+        // C4 行为规格：超限声明在读体之前拒绝——计数流一次 read 都不应发生
+        Headers headers = new Headers();
+        headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES + 1));
+        AtomicInteger reads = new AtomicInteger();
+        InputStream counting = new InputStream() {
+            @Override public int read() { reads.incrementAndGet(); return -1; }
+            @Override public int read(byte[] b, int off, int len) { reads.incrementAndGet(); return -1; }
+        };
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(counting, headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("上限"), ex.getMessage());
+        assertEquals(0, reads.get(), "先验拒绝不应读取响应体");
+    }
+
+    @Test
+    void oversizedDeclaredWithFailingCloseStillRejected() {
+        // 先验拒绝后的防御性关闭失败不得吞掉既定错误
+        Headers headers = new Headers();
+        headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES + 1));
+        InputStream failingClose = new ByteArrayInputStream(new byte[0]) {
+            @Override public void close() { throw new RuntimeException("close boom"); }
+        };
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(failingClose, headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("上限"), ex.getMessage());
+    }
+
+    @Test
+    void malformedClWithNullContentStillRejected() {
+        // 无实体（getContent()=null）+ 畸形声明：跳过关流分支，畸形错误仍落界
+        Headers headers = new Headers();
+        headers.add("Content-Length", "12ab");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(null, headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
     }
 
     /** RawResponse 桩：getContent() 返回给定流（null 表示无实体），getHeaders() 返回给定头，其余为安全桩值。 */

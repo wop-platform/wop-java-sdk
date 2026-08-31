@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -73,65 +74,105 @@ public final class UnirestTransport implements Transport {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         AtomicBoolean overflow = new AtomicBoolean();
         // consumer 内不能抛：JavaClient.transformBody 会把 RuntimeException 吞成 BasicResponse 永不传播，
-        // 读流错误存引用，thenConsume 返回后统一抛出
+        // 头部校验错误与读流错误同样存引用，thenConsume 返回后统一抛出
         AtomicReference<IOException> readError = new AtomicReference<>();
+        AtomicReference<String> headerError = new AtomicReference<>();
+        AtomicLong declared = new AtomicLong(-1);
         try {
             executable.thenConsume(raw -> {
                 status.set(raw.getStatus());
                 respHeaders.set(raw.getHeaders());
+                // 声明长度先验（读体之前）：畸形/负值/重复不一致是头部协议违规，无条件拒绝；
+                // 超限预检须有体语义（HEAD/1xx/204/205/304 的 CL 描述对应 GET 表示长度，
+                // RFC 9110 §6.4/§9.3.2）。拒绝时跳过读体（省掉上限+1 块的网络读取）
+                try {
+                    declared.set(parseDeclaredLength(respHeaders.get()));
+                } catch (WopSdkException e) {
+                    headerError.set(e.getMessage());
+                    closeQuietly(raw);
+                    return;
+                }
+                if (declared.get() > MAX_RESPONSE_BYTES
+                        && bodyExpected(draft.method(), status.get())) {
+                    headerError.set("Unirest 响应体声明 " + declared.get()
+                            + " 字节，超过 " + MAX_RESPONSE_BYTES + " 上限");
+                    closeQuietly(raw);
+                    return;
+                }
                 readBodyLimited(raw, buffer, overflow, readError);
             });
         } catch (UnirestException e) {
             throw new WopSdkException("Unirest 传输失败: " + e.getMessage(), e);
+        }
+        String earlyRejection = headerError.get();
+        if (earlyRejection != null) {
+            throw new WopSdkException(earlyRejection);
         }
         IOException streamFailure = readError.get();
         if (streamFailure != null) {
             throw new WopSdkException("Unirest 传输失败: " + streamFailure.getMessage(), streamFailure);
         }
         Map<String, String> headers = new LinkedHashMap<>();
-        String declaredLength = null;
         for (Header h : respHeaders.get().all()) {
-            String name = h.getName().toLowerCase();
-            headers.put(name, h.getValue());
-            if ("content-length".equals(name)) {
-                declaredLength = h.getValue();
-            }
-        }
-        // 畸形/负值 Content-Length 是头部协议违规，无条件落 WopSdkException 边界；
-        // 超限预检与截断等值校验均须有体语义（HEAD/1xx/204/205/304 的 CL 描述对应
-        // GET 表示长度，RFC 9110 §6.4/§9.3.2），无体时不参与读侧约束
-        long declared = -1;
-        if (declaredLength != null) {
-            declared = parseNonNegativeLength(declaredLength);
-        }
-        boolean expectBody = bodyExpected(draft.method(), status.get());
-        if (expectBody && declared > MAX_RESPONSE_BYTES) {
-            throw new WopSdkException("Unirest 响应体声明 " + declared
-                    + " 字节，超过 " + MAX_RESPONSE_BYTES + " 上限");
+            headers.put(h.getName().toLowerCase(), h.getValue());
         }
         if (overflow.get()) {
             throw new WopSdkException("Unirest 响应体超过 " + MAX_RESPONSE_BYTES + " 字节上限");
         }
+        boolean expectBody = bodyExpected(draft.method(), status.get());
         // JDK HttpClient 对传输中断连静默返回已读字节，此处按声明长度校验防截断体混入上层
-        if (expectBody && declared >= 0 && buffer.size() != declared) {
+        if (expectBody && declared.get() >= 0 && buffer.size() != declared.get()) {
             throw new WopSdkException("Unirest 响应体截断: Content-Length 声明 "
-                    + declared + "，实收 " + buffer.size());
+                    + declared.get() + "，实收 " + buffer.size());
         }
         return new TransportResponse(status.get(), headers, buffer.toByteArray());
     }
 
-    /** Content-Length 非负 long 解析；畸形/负值抛 {@link WopSdkException}（保持传输边界异常语义）。 */
+    /** 解析声明长度：收集全部 Content-Length 头，值不一致（RFC 9110 §8.6 歧义）或语法畸形
+     * 抛 {@link WopSdkException}；无声明返回 -1。 */
+    private static long parseDeclaredLength(Headers respHeaders) {
+        long declared = -1;
+        boolean seen = false;
+        for (Header h : respHeaders.all()) {
+            if (!"content-length".equals(h.getName().toLowerCase())) {
+                continue;
+            }
+            long value = parseNonNegativeLength(h.getValue());
+            if (seen && value != declared) {
+                throw new WopSdkException("Unirest 响应 Content-Length 重复且不一致: "
+                        + declared + " 与 " + value);
+            }
+            declared = value;
+            seen = true;
+        }
+        return declared;
+    }
+
+    /** Content-Length 语法解析（RFC 9110 §8.6 仅 1*DIGIT）：带符号（如 "+5"）、负值、非数字、
+     * 空值或超出 long 表示范围均属畸形，抛 {@link WopSdkException}（保持传输边界异常语义）。 */
     private static long parseNonNegativeLength(String raw) {
-        long value;
+        String normalized = raw.trim();
+        if (!normalized.chars().allMatch(c -> c >= '0' && c <= '9')) {
+            throw new WopSdkException("Unirest 响应 Content-Length 畸形: '" + normalized + "'");
+        }
         try {
-            value = Long.parseLong(raw.trim());
+            return Long.parseLong(normalized);
         } catch (NumberFormatException e) {
-            throw new WopSdkException("Unirest 响应 Content-Length 畸形: '" + raw.trim() + "'");
+            // 空值或 20 位以上纯数字超出 long 范围，按畸形落界
+            throw new WopSdkException("Unirest 响应 Content-Length 畸形: '" + normalized + "'");
         }
-        if (value < 0) {
-            throw new WopSdkException("Unirest 响应 Content-Length 畸形: '" + raw.trim() + "'");
+    }
+
+    /** 先验拒绝路径的防御性关闭：不读体仅关流（释放底层连接），关闭失败不影响既定错误。 */
+    private static void closeQuietly(RawResponse raw) {
+        try {
+            InputStream stream = raw.getContent();
+            if (stream != null) {
+                stream.close();
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // 先验错误已记录，关闭异常不改变结果
         }
-        return value;
     }
 
     /** 语义上是否应有响应体：HEAD 无体；1xx/204/205/304 无体（RFC 9110 §6.4）。 */
