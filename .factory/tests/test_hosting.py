@@ -492,8 +492,14 @@ class TestCodeupEndpointFallback:
         monkeypatch.setenv("CODEUP_REPO_ID", "42")
         with pytest.raises(hosting.HostingError) as e:
             ad._req("GET", "/oapi/v1/codeup/organizations/org/repositories/42")
-        # 两次都失败才报错；且报错信息指向重试后的端点
-        assert "openapi-rdc.aliyuncs.com" in str(e.value)
+        # 两次都失败才报错；且报错信息指向重试后的端点。
+        # CodeQL #3：子串 in 匹配被判定为不完整 URL 清洗；且消息中端点是
+        # 裸主机名（无 scheme），urlparse 提取不到——捕获「请求不可达（
+        # <endpoint>）」位置精确比较主机名，两者兼解。
+        import re
+        m = re.search(r"请求不可达（([^）]+)）", str(e.value))
+        assert m is not None
+        assert m.group(1) == "openapi-rdc.aliyuncs.com"
 
 
 class TestCli:
