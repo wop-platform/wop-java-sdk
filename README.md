@@ -1,5 +1,8 @@
 # WOP Java SDK
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
+[![CI](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) | [![License: MIT](https://img.shields.io/github/license/wop-platform/wop-java-sdk)](LICENSE)
+[![Java 17+](https://img.shields.io/badge/java-17%2B-orange?logo=openjdk&logoColor=white)](https://openjdk.org/) | ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 
 WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 / L2 数字信封 / 验签解密），
 商户无需理解 canonicalRequest、套件推导与线上字节格式即可安全对接。
