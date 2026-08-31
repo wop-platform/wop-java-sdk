@@ -210,15 +210,93 @@ class UnirestTransportFaultInjectionTest {
         assertTrue(ex.getMessage().contains("截断"), ex.getMessage());
     }
 
-    /** RawResponse 桩：getContent() 返回给定流（null 表示无实体），getHeaders() 返回给定头，其余为安全桩值。 */
-    private static RawResponse rawResponseWithBody(InputStream body) {
-        return rawResponseWithBody(body, new Headers());
+    @Test
+    void headResponseWithNonZeroLengthNotTruncated() {
+        // HEAD 无响应体（RFC 9110 §9.3.2），CL 描述 GET 表示长度 → 跳过截断校验
+        Headers headers = new Headers();
+        headers.add("Content-Length", "100");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[0]), headers));
+        TransportResponse response = transport.send(new RequestDraft("HEAD", "/p", Map.of(), null));
+        assertEquals(200, response.statusCode());
+        assertEquals(0, response.body().length);
     }
 
+    @Test
+    void bodylessStatusesSkipLengthCheck() {
+        // 1xx/204/205/304 无响应体（RFC 9110 §6.4），非零 CL 是表示描述 → 不判截断
+        for (int status : new int[]{100, 204, 205, 304}) {
+            Headers headers = new Headers();
+            headers.add("Content-Length", "100");
+            UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                    new ByteArrayInputStream(new byte[0]), headers, status));
+            TransportResponse response = transport.send(
+                    new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+            assertEquals(status, response.statusCode(), "status=" + status);
+            assertEquals(0, response.body().length);
+        }
+    }
+
+    @Test
+    void malformedContentLengthRejectedAsSdkException() {
+        // 畸形 CL 必须以 WopSdkException 落界（而非 NumberFormatException 泄漏）
+        Headers headers = new Headers();
+        headers.add("Content-Length", "12ab");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[2]), headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
+    }
+
+    @Test
+    void negativeContentLengthRejected() {
+        Headers headers = new Headers();
+        headers.add("Content-Length", "-5");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[0]), headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
+    }
+
+    @Test
+    void declaredLengthOverLimitRejected() {
+        // 声明超 11MiB 上限：显式拒绝（long 解析，int 范围外的合法值也不抛 NFE）
+        Headers headers = new Headers();
+        headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES + 1));
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[10]), headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("上限"), ex.getMessage());
+    }
+
+    @Test
+    void oversizedBodyWithoutDeclaredLengthRejected() {
+        // chunked 语义（无 Content-Length）：实际读满上限+1 才置位 overflow → 读侧超限防线
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[UnirestTransport.MAX_RESPONSE_BYTES + 1]), new Headers()));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("响应体超过"), ex.getMessage());
+    }
+
+    /** RawResponse 桩：getContent() 返回给定流（null 表示无实体），getHeaders() 返回给定头，其余为安全桩值。 */
+    private static RawResponse rawResponseWithBody(InputStream body) {
+        return rawResponseWithBody(body, new Headers(), 200);
+    }
     private static RawResponse rawResponseWithBody(InputStream body, Headers headers) {
+        return rawResponseWithBody(body, headers, 200);
+    }
+    private static RawResponse rawResponseWithBody(InputStream body, Headers headers, int status) {
+        return rawResponseWithBody(body, headers, status, "OK");
+    }
+
+    private static RawResponse rawResponseWithBody(InputStream body, Headers headers, int status, String statusText) {
         return new RawResponse() {
-            @Override public int getStatus() { return 200; }
-            @Override public String getStatusText() { return "OK"; }
+            @Override public int getStatus() { return status; }
+            @Override public String getStatusText() { return statusText; }
             @Override public Headers getHeaders() { return headers; }
             @Override public InputStream getContent() { return body; }
             @Override public byte[] getContentAsBytes() { return new byte[0]; }

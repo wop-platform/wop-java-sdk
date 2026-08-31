@@ -88,9 +88,6 @@ public final class UnirestTransport implements Transport {
         if (streamFailure != null) {
             throw new WopSdkException("Unirest 传输失败: " + streamFailure.getMessage(), streamFailure);
         }
-        if (overflow.get()) {
-            throw new WopSdkException("Unirest 响应体超过 " + MAX_RESPONSE_BYTES + " 字节上限");
-        }
         Map<String, String> headers = new LinkedHashMap<>();
         String declaredLength = null;
         for (Header h : respHeaders.get().all()) {
@@ -100,12 +97,48 @@ public final class UnirestTransport implements Transport {
                 declaredLength = h.getValue();
             }
         }
-        // JDK HttpClient 对传输中断连静默返回已读字节，此处按声明长度校验防截断体混入上层
-        if (declaredLength != null && buffer.size() != Integer.parseInt(declaredLength.trim())) {
+        // 声明长度先验：畸形/负值违反 WopSdkException 传输边界契约；超限声明显式拒绝
+        long declared = -1;
+        if (declaredLength != null) {
+            declared = parseNonNegativeLength(declaredLength);
+            if (declared > MAX_RESPONSE_BYTES) {
+                throw new WopSdkException("Unirest 响应体声明 " + declared
+                        + " 字节，超过 " + MAX_RESPONSE_BYTES + " 上限");
+            }
+        }
+        if (overflow.get()) {
+            throw new WopSdkException("Unirest 响应体超过 " + MAX_RESPONSE_BYTES + " 字节上限");
+        }
+        // JDK HttpClient 对传输中断连静默返回已读字节，此处按声明长度校验防截断体混入上层。
+        // HEAD 与 1xx/204/205/304 无响应体（RFC 9110 §6.4/§9.3.2），其 Content-Length
+        // 描述的是对应 GET 表示的长度，跳过等值校验防误判截断
+        if (declared >= 0 && buffer.size() != declared && bodyExpected(draft.method(), status.get())) {
             throw new WopSdkException("Unirest 响应体截断: Content-Length 声明 "
-                    + declaredLength.trim() + "，实收 " + buffer.size());
+                    + declared + "，实收 " + buffer.size());
         }
         return new TransportResponse(status.get(), headers, buffer.toByteArray());
+    }
+
+    /** Content-Length 非负 long 解析；畸形/负值抛 {@link WopSdkException}（保持传输边界异常语义）。 */
+    private static long parseNonNegativeLength(String raw) {
+        long value;
+        try {
+            value = Long.parseLong(raw.trim());
+        } catch (NumberFormatException e) {
+            throw new WopSdkException("Unirest 响应 Content-Length 畸形: '" + raw.trim() + "'");
+        }
+        if (value < 0) {
+            throw new WopSdkException("Unirest 响应 Content-Length 畸形: '" + raw.trim() + "'");
+        }
+        return value;
+    }
+
+    /** 语义上是否应有响应体：HEAD 无体；1xx/204/205/304 无体（RFC 9110 §6.4）。 */
+    private static boolean bodyExpected(String method, int status) {
+        if ("HEAD".equals(method)) {
+            return false;
+        }
+        return status >= 200 && status != 204 && status != 205 && status != 304;
     }
 
     /** 流式读取响应体：逐块计数，超 {@link #MAX_RESPONSE_BYTES} 置位并中止（不做整体缓冲）。无实体（null 流）按空 body 处理。
