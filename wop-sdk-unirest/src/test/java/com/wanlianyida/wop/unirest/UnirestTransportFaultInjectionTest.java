@@ -223,6 +223,18 @@ class UnirestTransportFaultInjectionTest {
     }
 
     @Test
+    void headWithOversizedDeclaredLengthNotRejected() {
+        // HEAD 探测 >11MiB 资源：CL 描述 GET 表示大小（合法），无体即无读侧约束 → 不抛超限/截断
+        Headers headers = new Headers();
+        headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES * 2));
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[0]), headers));
+        TransportResponse response = transport.send(new RequestDraft("HEAD", "/big", Map.of(), null));
+        assertEquals(200, response.statusCode());
+        assertEquals(0, response.body().length);
+    }
+
+    @Test
     void bodylessStatusesSkipLengthCheck() {
         // 1xx/204/205/304 无响应体（RFC 9110 §6.4），非零 CL 是表示描述 → 不判截断
         for (int status : new int[]{100, 204, 205, 304}) {

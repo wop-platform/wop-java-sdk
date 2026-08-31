@@ -97,22 +97,23 @@ public final class UnirestTransport implements Transport {
                 declaredLength = h.getValue();
             }
         }
-        // 声明长度先验：畸形/负值违反 WopSdkException 传输边界契约；超限声明显式拒绝
+        // 畸形/负值 Content-Length 是头部协议违规，无条件落 WopSdkException 边界；
+        // 超限预检与截断等值校验均须有体语义（HEAD/1xx/204/205/304 的 CL 描述对应
+        // GET 表示长度，RFC 9110 §6.4/§9.3.2），无体时不参与读侧约束
         long declared = -1;
         if (declaredLength != null) {
             declared = parseNonNegativeLength(declaredLength);
-            if (declared > MAX_RESPONSE_BYTES) {
-                throw new WopSdkException("Unirest 响应体声明 " + declared
-                        + " 字节，超过 " + MAX_RESPONSE_BYTES + " 上限");
-            }
+        }
+        boolean expectBody = bodyExpected(draft.method(), status.get());
+        if (expectBody && declared > MAX_RESPONSE_BYTES) {
+            throw new WopSdkException("Unirest 响应体声明 " + declared
+                    + " 字节，超过 " + MAX_RESPONSE_BYTES + " 上限");
         }
         if (overflow.get()) {
             throw new WopSdkException("Unirest 响应体超过 " + MAX_RESPONSE_BYTES + " 字节上限");
         }
-        // JDK HttpClient 对传输中断连静默返回已读字节，此处按声明长度校验防截断体混入上层。
-        // HEAD 与 1xx/204/205/304 无响应体（RFC 9110 §6.4/§9.3.2），其 Content-Length
-        // 描述的是对应 GET 表示的长度，跳过等值校验防误判截断
-        if (declared >= 0 && buffer.size() != declared && bodyExpected(draft.method(), status.get())) {
+        // JDK HttpClient 对传输中断连静默返回已读字节，此处按声明长度校验防截断体混入上层
+        if (expectBody && declared >= 0 && buffer.size() != declared) {
             throw new WopSdkException("Unirest 响应体截断: Content-Length 声明 "
                     + declared + "，实收 " + buffer.size());
         }
