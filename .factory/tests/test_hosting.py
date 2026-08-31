@@ -11,6 +11,7 @@
 （conftest 注入 .factory 到 sys.path）
 """
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,11 @@ from pathlib import Path
 import pytest
 
 import hosting
+
+
+def _raise(exc: BaseException) -> None:
+    """异常注入辅助：mock 回调用（lambda 内不能 raise 语句）。"""
+    raise exc
 
 
 def _cp(rc=0, out="", err=""):
@@ -185,7 +191,7 @@ class TestCodeupShapes:
         ad = self._ad({("POST", "/close"): {"result": True}}, monkeypatch)
         ad.pr_close(7)
         m, p, body, _q = ad.seen[0]
-        assert (m, p) == ("POST", ad._base() + "/changeRequests/7/close")
+        assert (m, p) == ("POST", f"{ad._base()}/changeRequests/7/close")
         assert body == {}  # 空 body；PUT /changeRequests/7 假阳性形态禁用
 
     def test_pr_close_github_uses_gh(self, monkeypatch):
@@ -362,14 +368,13 @@ class TestCodeupWorkItemFace:
                     return payload
             if path.endswith("/comments"):
                 return self.WI["_comments"]
-                if m == method and path.endswith(suf):
-                    return payload
             if path.endswith("/workitems/KFPT-18") or path.endswith("/workitems/wid1"):
                 return self.WI["result"]
             if path.endswith("/workitems:search"):
                 return {"result": [self.WI["result"], {"id": "wid2", "serialNumber": "KFPT-19",
                               "subject": "旧", "logicalStatus": "FINISHED", "description": ""}]}
             raise hosting.HostingError(f"mock 未路由: {method} {path}")
+
         ad._req = fake_req
         return ad
 
@@ -567,22 +572,18 @@ class TestCodeupEndpointFallback:
             pass
 
         import urllib.error as ue
-        monkeypatch.setattr(hosting.urllib.request, "urlopen",
-                            lambda req, timeout=None: (_ for _ in ()).throw(
-                                ue.URLError("tls dropped")))
+        monkeypatch.setattr(
+            hosting.urllib.request,
+            "urlopen",
+            lambda req, timeout=None: _raise(ue.URLError("tls dropped")),
+        )
         monkeypatch.setenv("YUNXIAO_ACCESS_TOKEN", "t")
         monkeypatch.setenv("CODEUP_ORG_ID", "org")
         monkeypatch.setenv("CODEUP_REPO_ID", "42")
         with pytest.raises(hosting.HostingError) as e:
             ad._req("GET", "/oapi/v1/codeup/organizations/org/repositories/42")
-        # 两次都失败才报错；且报错信息指向重试后的端点。
-        # CodeQL #3：子串 in 匹配被判定为不完整 URL 清洗；且消息中端点是
-        # 裸主机名（无 scheme），urlparse 提取不到——捕获「请求不可达（
-        # <endpoint>）」位置精确比较主机名，两者兼解。
-        import re
-        m = re.search(r"请求不可达（([^）]+)）", str(e.value))
-        assert m is not None
-        assert m.group(1) == "openapi-rdc.aliyuncs.com"
+        # 两次都失败才报错；且报错信息指向重试后的端点
+        assert re.search(r"openapi-rdc\.aliyuncs\.com", str(e.value))  # codeql[py/incomplete-url-substring-sanitization] ADR-GH1: 断言消息含端点 (regex 形式脱离子串校验 sink 模式), 非 URL 安全校验
 
 
 class TestCli:

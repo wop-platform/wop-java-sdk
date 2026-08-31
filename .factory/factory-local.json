@@ -37,5 +37,6 @@
   "pr_review_skills": [],
   "upstream_repo": "im47cn/awesome-rules",
   "upstream_path": "~/sources/awesome-rules",
-  "feedback_branch_prefix": "feedback/wop-java-sdk"
+  "feedback_branch_prefix": "feedback/wop-java-sdk",
+  "port_point": "55f72d5"
 }
