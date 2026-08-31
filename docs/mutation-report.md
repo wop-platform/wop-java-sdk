@@ -1,7 +1,7 @@
 # WOP Java SDK 变异测试报告
 
 > 日期：2026-08-29
-> 方法：PIT 环境阻塞（详见 §3）→ 手工变异脚本（/tmp/wop-mutation.py，14 个变异算子）
+> 方法：PIT 环境阻塞（详见 §3）→ 手工变异脚本（scripts/mutation-check.py，14 个变异算子）
 
 ## 1. 结论
 
@@ -54,7 +54,7 @@ PIT >> SEVERE : Coverage generator Minion exited abnormally due to UNKNOWN_ERROR
 
 ```bash
 # 手工变异脚本（变异后自动还原源码）
-python3 /tmp/wop-mutation.py
+python3 scripts/mutation-check.py
 
 # CI 环境 PIT（pom 已配）
 mvn -pl wop-sdk-core org.pitest:pitest-maven:mutationCoverage

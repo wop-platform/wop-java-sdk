@@ -26,9 +26,11 @@ public final class Sm4GcmStrategy implements MessageEncryptStrategy {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    /** 无状态单例，私有构造。 */
     private Sm4GcmStrategy() {
     }
 
+    /** 加密（IV 取自自管 CSPRNG，I4 生成点唯一）。 */
     @Override
     public CipherResult encrypt(byte[] plain, byte[] key) {
         return encrypt(plain, key, RANDOM);
@@ -55,6 +57,7 @@ public final class Sm4GcmStrategy implements MessageEncryptStrategy {
         }
     }
 
+    /** 解密（密文含 tag 尾拼，F4）。 */
     @Override
     public byte[] decrypt(byte[] cipher, byte[] iv, byte[] key) {
         requireKey(key);
@@ -68,27 +71,32 @@ public final class Sm4GcmStrategy implements MessageEncryptStrategy {
         }
     }
 
+    /** 线上算法名 Sm4Gcm。 */
     @Override
     public String algorithmName() {
         return ALGORITHM;
     }
 
+    /** 密钥长度（16 字节）。 */
     @Override
     public int keyLength() {
         return KEY_LENGTH;
     }
 
+    /** IV 长度（12 字节）。 */
     @Override
     public int ivLength() {
         return IV_LENGTH;
     }
 
+    /** 密钥守卫:非空且恰 16 字节，否则抛 {@link CryptoException}。 */
     private static void requireKey(byte[] key) {
         if (key == null || key.length != KEY_LENGTH) {
             throw new CryptoException("MESSAGE_ENCRYPT", ALGORITHM, "SM4 密钥须为 16 字节");
         }
     }
 
+    /** IV 守卫:非空且恰 12 字节，否则抛 {@link CryptoException}。 */
     private static void requireIv(byte[] iv) {
         if (iv == null || iv.length != IV_LENGTH) {
             throw new CryptoException("MESSAGE_ENCRYPT", ALGORITHM, "IV 须为 12 字节");

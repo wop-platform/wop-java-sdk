@@ -57,6 +57,7 @@ public final class AlgorithmSuite {
     private final MessageEncryptStrategy messageEncrypt;
     private final DigestStrategy digest;
 
+    /** 注册表私有构造（唯一装配点，D13）。 */
     private AlgorithmSuite(String securityReq, String keyAlgorithm, int keyLength, String digestAlgorithm,
                            String digestLabel, String expectedDekAlg,
                            SignatureStrategy signature, KeyEncryptStrategy keyEncrypt,
@@ -99,10 +100,12 @@ public final class AlgorithmSuite {
                 "不支持的算法组合: '" + securityReq + "'（国际密钥配国际摘要、国密密钥配国密摘要，跨族禁止）");
     }
 
+    /** 套件标签（与线上 securityReq 逐字一致，如 WOP-RSA3072-SHA256）。 */
     public String securityReq() {
         return securityReq;
     }
 
+    /** 密钥算法族：RSA / SM2。 */
     public String keyAlgorithm() {
         return keyAlgorithm;
     }
@@ -112,6 +115,7 @@ public final class AlgorithmSuite {
         return keyLength;
     }
 
+    /** 摘要算法名：SHA256 / SM3。 */
     public String digestAlgorithm() {
         return digestAlgorithm;
     }
@@ -126,6 +130,7 @@ public final class AlgorithmSuite {
         return expectedDekAlg;
     }
 
+    /** 签名策略（对 canonicalRequest 加签/验签）。 */
     public SignatureStrategy signature() {
         return signature;
     }
@@ -136,18 +141,22 @@ public final class AlgorithmSuite {
         return "SM2".equals(keyAlgorithm) ? 64 : keyLength / 8;
     }
 
+    /** 密钥加密策略（DEK 非对称包装/解包）。 */
     public KeyEncryptStrategy keyEncrypt() {
         return keyEncrypt;
     }
 
+    /** 报文加密策略（L2 信封对称加解密）。 */
     public MessageEncryptStrategy messageEncrypt() {
         return messageEncrypt;
     }
 
+    /** 摘要策略（x-wop-content-digest 底层哈希）。 */
     public DigestStrategy digest() {
         return digest;
     }
 
+    /** 调试串（含 securityReq）。 */
     @Override
     public String toString() {
         return "AlgorithmSuite[" + securityReq + "]";

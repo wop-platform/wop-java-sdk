@@ -1,6 +1,6 @@
 {
   "$schema": "https://awesome-rules.invalid/factory/mutations-v0.json",
-  "description": "S1 缺陷集（wop-java-sdk 本地化）：篡改类（guard 门）+ 行为破坏类 B-1xx（tests 门 scripts/run_tests.sh --no-lock = mvn -q verify，194 测试 + jacoco LINE/BRANCH 1.00 门禁）。行为类锚点取自 docs/mutation-report.md 手工变异报告（14/14 击杀），kill 证据 = 注入后 mvn verify 变红；负例（expect_block=false）验证门不全拒。证据留档 EVIDENCE-2026-08-29.md。",
+  "description": "S1 缺陷集（wop-java-sdk 本地化）：篡改类（guard 门）+ 行为破坏类 B-1xx（tests 门 scripts/run_tests.sh --no-lock = mvn -q verify，194 测试 + jacoco LINE/BRANCH 1.00 门禁）+ docstring 缺失类 D-0x（docstring 门 scripts/docstring_gate.py：删公开符号 javadoc → 对外 API <100% 应拦截）。行为类锚点取自 docs/mutation-report.md 手工变异报告（14/14 击杀），kill 证据 = 注入后 mvn verify 变红；负例（expect_block=false）验证门不全拒。证据留档 EVIDENCE-2026-08-29.md。",
   "defects": [
     {
       "id": "G-01",
@@ -117,6 +117,24 @@
       "find": "sb.append('\\n');",
       "replace": "sb.append('\\r\\n');",
       "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "D-01",
+      "description": "docstring 缺失：删除 AlgorithmSuite.securityReq() 公开方法 javadoc（对外 API <100%，docstring 门拦截）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/crypto/AlgorithmSuite.java",
+      "find": "    /** 套件标签（与线上 securityReq 逐字一致，如 WOP-RSA3072-SHA256）。 */\n",
+      "replace": "",
+      "gate": "docstring",
+      "expect_block": true
+    },
+    {
+      "id": "D-02",
+      "description": "docstring 缺失：删除 WopClient.Builder.build() 公开方法 javadoc（对外 API <100%，docstring 门拦截）",
+      "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/WopClient.java",
+      "find": "        /** 构造客户端：必填项与套件 fail-fast 校验，密钥按套件族即时解析（非法抛 {@link WopSdkException}）。 */\n",
+      "replace": "",
+      "gate": "docstring",
       "expect_block": true
     }
   ]

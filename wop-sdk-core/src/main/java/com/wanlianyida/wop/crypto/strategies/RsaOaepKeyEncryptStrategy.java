@@ -27,9 +27,11 @@ public final class RsaOaepKeyEncryptStrategy implements KeyEncryptStrategy {
     private static final OAEPParameterSpec OAEP =
             new OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
 
+    /** 无状态单例，私有构造。 */
     private RsaOaepKeyEncryptStrategy() {
     }
 
+    /** 包装（OAEP 随机源走新建 SecureRandom）。 */
     @Override
     public byte[] encrypt(byte[] plainKey, PublicKey publicKey) {
         return encrypt(plainKey, publicKey, new SecureRandom());
@@ -47,6 +49,7 @@ public final class RsaOaepKeyEncryptStrategy implements KeyEncryptStrategy {
         }
     }
 
+    /** 解包（OAEP 参数显式钉死 SHA-256 / MGF1-SHA-256，不依赖 JCA 默认）。 */
     @Override
     public byte[] decrypt(byte[] cipherText, PrivateKey privateKey) {
         try {
@@ -58,6 +61,7 @@ public final class RsaOaepKeyEncryptStrategy implements KeyEncryptStrategy {
         }
     }
 
+    /** 线上算法名 RSA-OAEP（SHA-256/MGF1-SHA-256）。 */
     @Override
     public String algorithmName() {
         return ALGORITHM;

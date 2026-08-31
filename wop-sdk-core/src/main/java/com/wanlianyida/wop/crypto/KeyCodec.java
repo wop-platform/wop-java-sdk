@@ -32,6 +32,7 @@ public final class KeyCodec {
 
     private static final ConcurrentHashMap<String, Object> CACHE = new ConcurrentHashMap<>();
 
+    /** 工具类禁实例化。 */
     private KeyCodec() {
     }
 
@@ -49,6 +50,7 @@ public final class KeyCodec {
                 k -> doParsePrivate(stripPem(pemOrBase64), suite));
     }
 
+    /** 实际解析公钥：RSA=SPKI（含长度校验）；SM2=65B 未压缩点或 SPKI（含曲线守卫）。 */
     private static PublicKey doParsePublic(byte[] der, AlgorithmSuite suite) {
         try {
             if ("RSA".equals(suite.keyAlgorithm())) {
@@ -74,6 +76,7 @@ public final class KeyCodec {
         }
     }
 
+    /** 实际解析私钥：RSA=PKCS#8（含长度校验）；SM2=d 32B 标量或 PKCS#8（含域校验）。 */
     private static PrivateKey doParsePrivate(byte[] der, AlgorithmSuite suite) {
         try {
             if ("RSA".equals(suite.keyAlgorithm())) {
@@ -108,10 +111,12 @@ public final class KeyCodec {
         }
     }
 
+    /** BC Provider 供给的 EC KeyFactory。 */
     private static KeyFactory ecFactory() throws Exception {
         return KeyFactory.getInstance("EC", BouncyCastleHolder.provider());
     }
 
+    /** sm2p256v1 命名曲线域（委托 {@code Sm2Support}）。 */
     private static ECNamedDomainParameters sm2Domain() {
         return com.wanlianyida.wop.crypto.strategies.Sm2Support.namedDomain();
     }
@@ -128,12 +133,14 @@ public final class KeyCodec {
         }
     }
 
+    /** 入参非空守卫（空值抛配置类明确异常）。 */
     private static void requireText(String text, String kind) {
         if (text == null || text.isBlank()) {
             throw new WopSdkException(kind + "为空");
         }
     }
 
+    /** 缓存键（securityReq:kind:hash:长度，避免持有密钥明文串）。 */
     private static String cacheKey(AlgorithmSuite suite, String kind, String key) {
         return suite.securityReq() + ':' + kind + ':' + key.hashCode() + ':' + key.length();
     }

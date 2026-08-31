@@ -9,9 +9,12 @@ import java.security.PublicKey;
  */
 public interface SignatureStrategy {
 
+    /** 对 canonicalRequest 加签。 */
     byte[] sign(byte[] data, PrivateKey privateKey);
 
+    /** 验签。 */
     boolean verify(byte[] data, byte[] signature, PublicKey publicKey);
 
+    /** 线上算法名。 */
     String algorithmName();
 }

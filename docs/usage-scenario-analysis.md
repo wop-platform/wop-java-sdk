@@ -51,7 +51,7 @@
 | 行覆盖率 | **100.00%** | JaCoCo（core/okhttp/jdkhttp） |
 | 分支覆盖率 | **100.00%** | JaCoCo（core；okhttp/jdkhttp 100%） |
 | Gherkin 场景 | **19/19 通过** | Cucumber-junit-platform（15 feature 场景 + 步骤） |
-| 变异测试 | 见 `docs/mutation-report.md` | PIT 环境阻塞 → 手工变异脚本（/tmp/wop-mutation.py） |
+| 变异测试 | 见 `docs/mutation-report.md` | PIT 环境阻塞 → 手工变异脚本（scripts/mutation-check.py） |
 | 单元测试 | 176 全过 | JUnit 5 |
 
 ## 4. 测试覆盖到的"使用问题"边界（防回归锚点）

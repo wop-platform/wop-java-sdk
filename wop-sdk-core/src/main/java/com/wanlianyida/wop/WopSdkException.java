@@ -7,10 +7,12 @@ package com.wanlianyida.wop;
  */
 public class WopSdkException extends RuntimeException {
 
+    /** 以明确语义消息构造。 */
     public WopSdkException(String message) {
         super(message);
     }
 
+    /** 携带底层原因构造。 */
     public WopSdkException(String message, Throwable cause) {
         super(message, cause);
     }

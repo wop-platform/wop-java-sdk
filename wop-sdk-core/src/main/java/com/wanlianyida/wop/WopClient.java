@@ -50,6 +50,7 @@ public final class WopClient {
     private final Supplier<String> nonceGen;
     private final SecureRandom random;
 
+    /** 测试便捷构造（随机源退默认 CSPRNG）。 */
     WopClient(Config config, LongSupplier clock, Supplier<String> nonceGen) {
         this(config, clock, nonceGen, new SecureRandom());
     }
@@ -65,6 +66,7 @@ public final class WopClient {
         this.random = random;
     }
 
+    /** 创建 {@link Builder}。 */
     public static Builder builder() {
         return new Builder();
     }
@@ -157,6 +159,7 @@ public final class WopClient {
         return verifyInbound(headers, body, callbackPath);
     }
 
+    /** 入向统一实现（F6 固定顺序：验签 → digest 复核 → DEK 解包 → alg 族比对 → bulk 解密）；永不抛异常。 */
     private VerifyResult verifyInbound(Map<String, String> headers, byte[] body, String path) {
         Map<String, String> lower = lowerCase(headers);
 
@@ -299,6 +302,7 @@ public final class WopClient {
                   String platformPublicKey, long expiredSeconds) {
     }
 
+    /** 按签名头清单取子集（保持清单顺序，供 canonicalHeaders 编码）。 */
     private static Map<String, String> subMap(Map<String, String> headers, List<String> names) {
         Map<String, String> sub = new LinkedHashMap<>();
         for (String name : names) {
@@ -307,6 +311,7 @@ public final class WopClient {
         return sub;
     }
 
+    /** 头名大小写不敏感视图（null 安全）。 */
     private static Map<String, String> lowerCase(Map<String, String> headers) {
         Map<String, String> lower = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         if (headers != null) {
@@ -324,6 +329,7 @@ public final class WopClient {
         private String platformPublicKey;
         private long expiredSeconds = DEFAULT_EXPIRED_SECONDS;
 
+        /** 商户 appKey（x-wop-appkey，必填）。 */
         public Builder appKey(String appKey) {
             this.appKey = appKey;
             return this;
@@ -335,21 +341,25 @@ public final class WopClient {
             return this;
         }
 
+        /** 商户私钥（PEM 或 Base64 单行；出向加签/入向解包用，必填）。 */
         public Builder merchantPrivateKey(String pemOrBase64) {
             this.merchantPrivateKey = pemOrBase64;
             return this;
         }
 
+        /** 平台公钥（PEM 或 Base64 单行；DEK 包装/入向验签用，必填）。 */
         public Builder platformPublicKey(String pemOrBase64) {
             this.platformPublicKey = pemOrBase64;
             return this;
         }
 
+        /** 签名有效时长秒数（默认 {@link #DEFAULT_EXPIRED_SECONDS}，须正整数）。 */
         public Builder expiredSeconds(long seconds) {
             this.expiredSeconds = seconds;
             return this;
         }
 
+        /** 构造客户端：必填项与套件 fail-fast 校验，密钥按套件族即时解析（非法抛 {@link WopSdkException}）。 */
         public WopClient build() {
             if (appKey == null || appKey.isBlank()) {
                 throw new WopSdkException("appKey 为空");
@@ -378,6 +388,7 @@ public final class WopClient {
         }
     }
 
+    /** 默认 nonce 生成器：CSPRNG 16 字节 → 小写 hex（32 字符）。 */
     private static Supplier<String> defaultNonceSupplier() {
         SecureRandom random = new SecureRandom();
         return () -> {
