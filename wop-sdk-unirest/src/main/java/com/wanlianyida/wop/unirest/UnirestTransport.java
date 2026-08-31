@@ -44,7 +44,8 @@ public final class UnirestTransport implements Transport {
 
     public UnirestTransport(String baseUrl) {
         this(baseUrl, new UnirestInstance(new Config().connectTimeout(10_000)
-                // 停发 Accept-Encoding:gzip 协商——JDK HttpClient 不自动解压，防网关回 gzip 交付压缩字节
+                // 停发 Accept-Encoding:gzip 协商——JavaResponse.getContent() 对 gzip 响应透明解压，
+                // 解压后长度≠声明 Content-Length（压缩大小），截断校验会误杀所有 gzip 响应
                 .requestCompression(false)));
     }
 
@@ -71,14 +72,21 @@ public final class UnirestTransport implements Transport {
         AtomicReference<Headers> respHeaders = new AtomicReference<>();
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         AtomicBoolean overflow = new AtomicBoolean();
+        // consumer 内不能抛：JavaClient.transformBody 会把 RuntimeException 吞成 BasicResponse 永不传播，
+        // 读流错误存引用，thenConsume 返回后统一抛出
+        AtomicReference<IOException> readError = new AtomicReference<>();
         try {
             executable.thenConsume(raw -> {
                 status.set(raw.getStatus());
                 respHeaders.set(raw.getHeaders());
-                readBodyLimited(raw, buffer, overflow);
+                readBodyLimited(raw, buffer, overflow, readError);
             });
         } catch (UnirestException e) {
             throw new WopSdkException("Unirest 传输失败: " + e.getMessage(), e);
+        }
+        IOException streamFailure = readError.get();
+        if (streamFailure != null) {
+            throw new WopSdkException("Unirest 传输失败: " + streamFailure.getMessage(), streamFailure);
         }
         if (overflow.get()) {
             throw new WopSdkException("Unirest 响应体超过 " + MAX_RESPONSE_BYTES + " 字节上限");
@@ -100,8 +108,10 @@ public final class UnirestTransport implements Transport {
         return new TransportResponse(status.get(), headers, buffer.toByteArray());
     }
 
-    /** 流式读取响应体：逐块计数，超 {@link #MAX_RESPONSE_BYTES} 置位并中止（不做整体缓冲）。无实体（null 流）按空 body 处理。 */
-    private static void readBodyLimited(RawResponse raw, ByteArrayOutputStream buffer, AtomicBoolean overflow) {
+    /** 流式读取响应体：逐块计数，超 {@link #MAX_RESPONSE_BYTES} 置位并中止（不做整体缓冲）。无实体（null 流）按空 body 处理。
+     * 读流 {@link IOException} 存入 {@code readError} 不抛出——抛出会被 JavaClient.transformBody 吞掉（见 send 内注释）。 */
+    private static void readBodyLimited(RawResponse raw, ByteArrayOutputStream buffer, AtomicBoolean overflow,
+            AtomicReference<IOException> readError) {
         InputStream stream = raw.getContent();
         if (stream == null) {
             return;
@@ -117,7 +127,7 @@ public final class UnirestTransport implements Transport {
                 buffer.write(chunk, 0, read);
             }
         } catch (IOException e) {
-            throw new UnirestException(e);
+            readError.set(e);
         } finally {
             try {
                 stream.close();

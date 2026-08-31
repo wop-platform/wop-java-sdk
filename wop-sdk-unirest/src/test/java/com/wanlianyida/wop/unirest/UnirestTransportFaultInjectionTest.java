@@ -23,6 +23,7 @@ import okhttp3.mockwebserver.SocketPolicy;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -190,19 +191,35 @@ class UnirestTransportFaultInjectionTest {
     @Test
     void nullContentMappedToEmpty() {
         // 边界：getContent() 返回 null（无实体语义）→ 空 body 交付
-        UnirestTransport transport = injectedTransport(null);
+        UnirestTransport transport = injectedTransport((InputStream) null);
         TransportResponse response = transport.send(
                 new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals(0, response.body().length);
     }
 
-    /** RawResponse 桩：仅 getContent() 返回给定流（null 表示无实体），其余为安全桩值。 */
+    @Test
+    void declaredLengthMismatchRejected() {
+        // 截断校验：声明 Content-Length=100 实收 10 字节，读流正常 EOF（无读错误）→ 拒绝交付截断体
+        Headers headers = new Headers();
+        headers.add("Content-Length", "100");
+        UnirestTransport transport = injectedTransport(rawResponseWithBody(
+                new ByteArrayInputStream(new byte[10]), headers));
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("截断"), ex.getMessage());
+    }
+
+    /** RawResponse 桩：getContent() 返回给定流（null 表示无实体），getHeaders() 返回给定头，其余为安全桩值。 */
     private static RawResponse rawResponseWithBody(InputStream body) {
+        return rawResponseWithBody(body, new Headers());
+    }
+
+    private static RawResponse rawResponseWithBody(InputStream body, Headers headers) {
         return new RawResponse() {
             @Override public int getStatus() { return 200; }
             @Override public String getStatusText() { return "OK"; }
-            @Override public Headers getHeaders() { return new Headers(); }
+            @Override public Headers getHeaders() { return headers; }
             @Override public InputStream getContent() { return body; }
             @Override public byte[] getContentAsBytes() { return new byte[0]; }
             @Override public String getContentAsString() { return ""; }
@@ -217,9 +234,8 @@ class UnirestTransportFaultInjectionTest {
         };
     }
 
-    /** 以产出指定 body 流的伪 Client 构造 Transport（无网络，异常路径全确定性）。 */
-    private static UnirestTransport injectedTransport(InputStream body) {
-        RawResponse response = rawResponseWithBody(body);
+    /** 以产出指定响应的伪 Client 构造 Transport（无网络，异常路径全确定性）。 */
+    private static UnirestTransport injectedTransport(RawResponse response) {
         Client fakeClient = new Client() {
             @Override public <T> T getClient() { return null; }
             @Override public <T> HttpResponse<T> request(HttpRequest request,
@@ -244,5 +260,9 @@ class UnirestTransportFaultInjectionTest {
         };
         return new UnirestTransport("http://127.0.0.1:1/",
                 new UnirestInstance(new Config().httpClient(fakeClient)));
+    }
+
+    private static UnirestTransport injectedTransport(InputStream body) {
+        return injectedTransport(rawResponseWithBody(body));
     }
 }
