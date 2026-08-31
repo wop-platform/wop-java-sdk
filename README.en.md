@@ -16,6 +16,7 @@ wire byte formats.
 | `wop-sdk-core` | Protocol core: suite parsing, canonicalRequest, `x-wop-sign` sign/verify, `x-wop-content-digest`, L2 digital envelope, F6 verification order, I7 error obfuscation; hosts the `Transport` abstraction |
 | `wop-sdk-okhttp` | OkHttp adapter (okhttp dependency is `provided`; bring your own version) |
 | `wop-sdk-jdkhttp` | `java.net.http` adapter (zero extra dependencies) |
+| `wop-sdk-unirest` | Kong Unirest 4.x adapter (unirest-java-core dependency is `provided`; bring your own version) |
 
 Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
 
@@ -28,7 +29,7 @@ Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
   <version>0.1.0</version>
 </dependency>
 
-<!-- Optional adapter (pick one): okhttp dependency is provided (bring your own) / jdkhttp has zero extra dependencies -->
+<!-- Optional adapter (pick one): okhttp / unirest client dependencies are provided (bring your own; for unirest that is com.konghq:unirest-java-core) / jdkhttp has zero extra dependencies. The unirest adapter creates its own UnirestInstance by default — for long-running services, inject a shared instance via the constructor and close it on shutdown -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
@@ -38,6 +39,12 @@ Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-jdkhttp</artifactId>
+  <version>0.1.0</version>
+</dependency>
+<!-- or -->
+<dependency>
+  <groupId>com.wanlianyida</groupId>
+  <artifactId>wop-sdk-unirest</artifactId>
   <version>0.1.0</version>
 </dependency>
 ```
