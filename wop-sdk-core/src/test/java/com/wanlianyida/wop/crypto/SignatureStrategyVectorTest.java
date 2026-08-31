@@ -3,7 +3,6 @@ package com.wanlianyida.wop.crypto;
 import com.wanlianyida.wop.crypto.strategies.RsaPkcs1SignatureStrategy;
 import com.wanlianyida.wop.crypto.strategies.SignatureStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sm2SignatureStrategy;
-import com.wanlianyida.wop.crypto.strategies.Sm2Support;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -26,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li>负向量：tamper / 63B、65B 定长 / DER 编码 / 跨族</li>
  * </ul>
  * spec:D14：userId 显式入参——RSA 忽略该字节（任意值），SM2 必须与请求身份同源
- * （此处理论向量用默认值断言，线上由 WopClient 传入 appKey）。
+ * （此处理论向量用协议固定值断言，与 Sm2FixedKSigner 一致；线上由 WopClient 传 appKey）。
  */
 class SignatureStrategyVectorTest {
 
@@ -103,13 +102,13 @@ class SignatureStrategyVectorTest {
         assertEquals(64, rs.length);
         assertEquals(86, Codec.b64UrlEncode(rs).length());
 
-        // 生产策略（BC SM2Signer，userId 显式传入，此处理论向量用默认值）必须验证通过向量签名
+        // 生产策略（BC SM2Signer，userId 显式传入协议固定值，与 Sm2FixedKSigner 一致）必须验证通过向量签名
         SignatureStrategy strategy = Sm2SignatureStrategy.INSTANCE;
-        assertTrue(strategy.verify(msg, rs, pub, Sm2Support.DEFAULT_USER_ID));
+        assertTrue(strategy.verify(msg, rs, pub, Codec.utf8("1234567812345678")));
         // 生产签名（随机 k）结构合法且可验证
-        byte[] produced = strategy.sign(msg, priv, Sm2Support.DEFAULT_USER_ID);
+        byte[] produced = strategy.sign(msg, priv, Codec.utf8("1234567812345678"));
         assertEquals(64, produced.length);
-        assertTrue(strategy.verify(msg, produced, pub, Sm2Support.DEFAULT_USER_ID));
+        assertTrue(strategy.verify(msg, produced, pub, Codec.utf8("1234567812345678")));
         assertFalse(Arrays.equals(produced, rs)); // k 不同则签名不同（随机化）
     }
 
@@ -121,12 +120,12 @@ class SignatureStrategyVectorTest {
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
         byte[] sig = Codec.b64UrlDecode(vector.path("expectedSigB64u").asText());
 
-        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, Arrays.copyOfRange(sig, 0, 63), pub, Sm2Support.DEFAULT_USER_ID));
-        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, Arrays.copyOf(sig, 65), pub, Sm2Support.DEFAULT_USER_ID));
-        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, null, pub, Sm2Support.DEFAULT_USER_ID));
+        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, Arrays.copyOfRange(sig, 0, 63), pub, Codec.utf8("1234567812345678")));
+        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, Arrays.copyOf(sig, 65), pub, Codec.utf8("1234567812345678")));
+        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, null, pub, Codec.utf8("1234567812345678")));
         // DER SEQUENCE 编码（线上禁止，D9）——72B 左右，长度即拒
         byte[] der = toDer(sig);
-        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, der, pub, Sm2Support.DEFAULT_USER_ID));
+        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, der, pub, Codec.utf8("1234567812345678")));
     }
 
     @Test
@@ -136,7 +135,7 @@ class SignatureStrategyVectorTest {
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
         byte[] sig = Codec.b64UrlDecode(vector.path("expectedSigB64u").asText());
         sig[sig.length - 1] ^= 0x01;
-        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, sig, pub, Sm2Support.DEFAULT_USER_ID));
+        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, sig, pub, Codec.utf8("1234567812345678")));
     }
 
     @Test
@@ -146,7 +145,7 @@ class SignatureStrategyVectorTest {
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PublicKey sm2Pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
         byte[] rsaSig = Codec.b64UrlDecode(vector.path("expectedSigB64u").asText());
-        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, rsaSig, sm2Pub, Sm2Support.DEFAULT_USER_ID));
+        assertFalse(Sm2SignatureStrategy.INSTANCE.verify(msg, rsaSig, sm2Pub, Codec.utf8("1234567812345678")));
     }
 
     @Test

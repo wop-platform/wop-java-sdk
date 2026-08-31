@@ -87,7 +87,7 @@ class CoverageCloseTest {
                 TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
         assertThrows(CryptoException.class, () -> Sm2KeyEncryptStrategy.INSTANCE.encrypt(null, pub));
         assertThrows(CryptoException.class, () -> Sm2KeyEncryptStrategy.INSTANCE.decrypt(null, priv));
-        assertThrows(CryptoException.class, () -> Sm2SignatureStrategy.INSTANCE.sign(null, priv, Sm2Support.DEFAULT_USER_ID));
+        assertThrows(CryptoException.class, () -> Sm2SignatureStrategy.INSTANCE.sign(null, priv, Codec.utf8("1234567812345678")));
     }
 
     @Test
@@ -97,9 +97,9 @@ class CoverageCloseTest {
         generator.initialize(new ECGenParameterSpec("secp256r1"));
         var pair = generator.generateKeyPair();
         assertThrows(CryptoException.class,
-                () -> Sm2SignatureStrategy.INSTANCE.verify(Codec.utf8("m"), new byte[64], pair.getPublic(), Sm2Support.DEFAULT_USER_ID));
+                () -> Sm2SignatureStrategy.INSTANCE.verify(Codec.utf8("m"), new byte[64], pair.getPublic(), Codec.utf8("1234567812345678")));
         assertThrows(CryptoException.class,
-                () -> Sm2SignatureStrategy.INSTANCE.sign(Codec.utf8("m"), pair.getPrivate(), Sm2Support.DEFAULT_USER_ID));
+                () -> Sm2SignatureStrategy.INSTANCE.sign(Codec.utf8("m"), pair.getPrivate(), Codec.utf8("1234567812345678")));
         assertThrows(CryptoException.class,
                 () -> Sm2KeyEncryptStrategy.INSTANCE.encrypt(Codec.utf8("m"), pair.getPublic()));
         assertThrows(CryptoException.class,

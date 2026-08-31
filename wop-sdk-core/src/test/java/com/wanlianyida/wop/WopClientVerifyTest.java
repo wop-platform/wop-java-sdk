@@ -11,7 +11,6 @@ import com.wanlianyida.wop.crypto.KeyCodec;
 import com.wanlianyida.wop.crypto.SignHeader;
 import com.wanlianyida.wop.crypto.TestVectors;
 import com.wanlianyida.wop.crypto.strategies.CipherResult;
-import com.wanlianyida.wop.crypto.strategies.Sm2Support;
 import org.junit.jupiter.api.Test;
 
 import java.security.PrivateKey;
@@ -31,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * F6 校验顺序 + I7 模糊化 + D2/I1/I5 负向量：verifyResponse / verifyCallback。
  * 平台侧响应由 PlatformRig 按协议拼装（平台私钥加签、商户公钥包 DEK）。
- * spec:D14：平台侧验签/签名 userId 与请求身份同源（Sm2Support.DEFAULT_USER_ID 仅用于平台侧装配）。
+ * spec:D14：平台侧验签/签名 userId = 协议固定值（与入向验签一致；出向由商户显式传 appKey）。
  */
 class WopClientVerifyTest {
 
@@ -110,7 +109,7 @@ class WopClientVerifyTest {
             signed.forEach(n -> sub.put(n, headers.get(n)));
             String canonical = CanonicalRequest.build("v1/1800", "POST", path, "",
                     CanonicalRequest.canonicalHeaders(sub));
-            byte[] sig = suite.signature().sign(Codec.utf8(canonical), platformPriv, Sm2Support.DEFAULT_USER_ID);
+            byte[] sig = suite.signature().sign(Codec.utf8(canonical), platformPriv, Codec.utf8("1234567812345678"));
             headers.put("x-wop-sign", SignHeader.build(suite.securityReq(), 1800, signed,
                     Codec.b64UrlEncode(sig)));
         }
@@ -443,7 +442,7 @@ class WopClientVerifyTest {
         String canonical = CanonicalRequest.build("v1/1800", "POST", path, "",
                 CanonicalRequest.canonicalHeaders(sub));
         // spec:D14：平台侧重签 userId 与装配一致
-        byte[] sig = RSA.signature().sign(Codec.utf8(canonical), platformPriv, Sm2Support.DEFAULT_USER_ID);
+        byte[] sig = RSA.signature().sign(Codec.utf8(canonical), platformPriv, Codec.utf8("1234567812345678"));
         headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800, signedNames,
                 Codec.b64UrlEncode(sig)));
     }

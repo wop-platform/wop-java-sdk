@@ -64,16 +64,15 @@ class CoverageClose2Test {
     }
 
     @Test
-    void sm2SignWithNullUserIdUsesDefault() {
-        // spec:D14：userId=null → 协议默认（黄金向量一致），sign/verify 双路径覆盖 withId null 分支
+    void sm2SignWithNullUserIdRejected() {
+        // spec:D14：userId=null → 显式拒绝（无默认回退），sign/verify 双路径覆盖 withId null 分支
         byte[] msg = Codec.utf8("x");
         PrivateKey priv = KeyCodec.parsePrivateKey(
                 TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
         PublicKey pub = KeyCodec.parsePublicKey(
                 TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
-        byte[] sig = Sm2SignatureStrategy.INSTANCE.sign(msg, priv, null);
-        assertEquals(64, sig.length);
-        assertTrue(Sm2SignatureStrategy.INSTANCE.verify(msg, sig, pub, null));
+        assertThrows(CryptoException.class, () -> Sm2SignatureStrategy.INSTANCE.sign(msg, priv, null));
+        assertThrows(CryptoException.class, () -> Sm2SignatureStrategy.INSTANCE.verify(msg, new byte[64], pub, null));
     }
 
     @Test
@@ -133,7 +132,7 @@ class CoverageClose2Test {
         headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800,
                 Arrays.asList("x-wop-nonce", "x-wop-timestamp"),
                 Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv,
-                        Sm2Support.DEFAULT_USER_ID))));
+                        Codec.utf8("1234567812345678")))));
         VerifyResult result = client.verifyResponse(headers, null, "/p");
         assertTrue(result.ok(), () -> result.toString());
         assertNull(result.plaintext());
@@ -173,7 +172,7 @@ class CoverageClose2Test {
         headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800,
                 Arrays.asList("x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"),
                 Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv,
-                        Sm2Support.DEFAULT_USER_ID))));
+                        Codec.utf8("1234567812345678")))));
 
         assertEquals(VerifyResult.Reason.INVALID_ENCRYPT_HEADER,
                 client.verifyResponse(headers, wire, "/p").reason());

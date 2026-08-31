@@ -16,11 +16,11 @@ import java.security.PublicKey;
  * <p>
  * 仅接受 sm2p256v1 推荐曲线域（指纹整体比较，防非 SM2 EC 密钥静默参与国密运算）；
  * 非法输入抛 {@link IllegalArgumentException}，由策略包装为 {@link com.wanlianyida.wop.crypto.CryptoException} 或归入模糊失败。
+ * <p>
+ * SM2 签名 userId（D14）无默认值：出向 = x-wop-appkey、入向 = 平台协议固定值
+ * {@code "1234567812345678"}（见 WopClient.PLATFORM_SIGN_USER_ID），由调用方显式传入。
  */
 public final class Sm2Support {
-
-    /** SM2 签名/验签默认 userId（与黄金向量一致，协议级常量）。 */
-    public static final byte[] DEFAULT_USER_ID = "1234567812345678".getBytes();
 
     /** 工具类禁实例化。 */
     private Sm2Support() {

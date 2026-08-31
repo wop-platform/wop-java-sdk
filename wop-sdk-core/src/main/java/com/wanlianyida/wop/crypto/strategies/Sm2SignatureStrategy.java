@@ -23,8 +23,8 @@ import java.util.Arrays;
  * 线上编码 = <b>裸 r‖s 固定 64 字节</b>（D9：线上禁止 DER/ASN.1）；JVM 内部经 BC
  * {@link SM2Signer}（DER 编码）产出后转换。
  * 验签长度 ≠ 64 一律 false（spec §3.3① 定长前置校验）。
- * userId 参与签名/验签（D14）：SM2 国标 ZA 杂凑含 userId；缺省用
- * {@link Sm2Support#DEFAULT_USER_ID}（与黄金向量一致）。
+ * userId 必传（D14）：SM2 国标 ZA 杂凑含 userId——出向 = x-wop-appkey、
+ * 入向 = 平台协议固定值，由调用方显式传入；null 显式拒绝（无默认回退）。
  */
 public final class Sm2SignatureStrategy implements SignatureStrategy {
 
@@ -76,10 +76,12 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         return ALGORITHM;
     }
 
-    /** userId 空 → 协议默认（黄金向量一致）；非空包 {@link ParametersWithID}。 */
+    /** userId 必传（D14：出向=appKey、入向=平台协议固定值）；null 显式拒绝，禁止静默回退默认。 */
     private static ParametersWithID withId(org.bouncycastle.crypto.CipherParameters params, byte[] userId) {
-        byte[] id = userId == null ? Sm2Support.DEFAULT_USER_ID : userId;
-        return new ParametersWithID(params, id);
+        if (userId == null) {
+            throw new IllegalArgumentException("SM2 userId 缺失（D14：必须显式传入，无默认回退）");
+        }
+        return new ParametersWithID(params, userId);
     }
 
     /** BC 签名（DER SEQUENCE{r, s}）→ 裸 r||s 64B（D9 线上编码）。 */

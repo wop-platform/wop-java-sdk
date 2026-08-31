@@ -11,7 +11,6 @@ import com.wanlianyida.wop.crypto.KeyCodec;
 import com.wanlianyida.wop.crypto.SignHeader;
 import com.wanlianyida.wop.crypto.WopSuiteException;
 import com.wanlianyida.wop.crypto.strategies.CipherResult;
-import com.wanlianyida.wop.crypto.strategies.Sm2Support;
 
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
@@ -43,6 +42,9 @@ public final class WopClient {
     private static final String HEADER_DIGEST = "x-wop-content-digest";
     private static final String HEADER_ENCRYPT = "x-wop-encrypt";
 
+    /** 平台响应签名 userId（协议固定值，与 Go 参考实现 sm2PlatformUserID 一致；仅入向验签使用，
+     *  非出向默认回退——出向恒为 x-wop-appkey 头值，D14）。 */
+    private static final byte[] PLATFORM_SIGN_USER_ID = "1234567812345678".getBytes(StandardCharsets.UTF_8);
     private final Config config;
     private final AlgorithmSuite suite;
     private final PrivateKey merchantPrivateKey;
@@ -241,9 +243,9 @@ public final class WopClient {
         }
         boolean verified = false;
         try {
-            // D14：入向验签 userId = 平台侧协议默认（与黄金向量/Go 参考一致）
+            // D14：入向验签 userId = 平台协议固定值（与 Go 参考实现 sm2PlatformUserID 一致，仅入向）
             verified = inboundSuite.signature().verify(Codec.utf8(canonical), signature,
-                    platformPublicKey, Sm2Support.DEFAULT_USER_ID);
+                    platformPublicKey, PLATFORM_SIGN_USER_ID);
         } catch (RuntimeException e) {
             verified = false;
         }

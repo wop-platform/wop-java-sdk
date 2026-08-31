@@ -6,7 +6,6 @@ import com.wanlianyida.wop.crypto.Codec;
 import com.wanlianyida.wop.crypto.KeyCodec;
 import com.wanlianyida.wop.crypto.SignHeader;
 import com.wanlianyida.wop.crypto.TestVectors;
-import com.wanlianyida.wop.crypto.strategies.Sm2Support;
 import org.junit.jupiter.api.Test;
 
 import java.security.PublicKey;
@@ -156,11 +155,11 @@ class WopSpecConformanceTest {
         assertEquals("app_001", draft.headers().get("x-wop-appkey"));
     }
 
-    /** D14 否定：同一 SM2 出向签名改用默认 userId 验签失败——证明出向签名绑定的是
-     *  appKey 而非默认常量（若误用默认值，此断言必失败）。 */
+    /** D14 否定：同一 SM2 出向签名改用协议固定值（≠appKey） 验签失败——证明出向签名绑定的是
+     *  appKey 而非固定 userId（若误用固定值，此断言必失败）。 */
     @Test
     // spec:D14
-    void sm2OutboundSignatureFailsWithDefaultUserId() {
+    void sm2OutboundSignatureFailsWithForeignUserId() {
         WopClient client = fixedClient("WOP-SM2-SM3", SM2_PRIV, SM2_PUB);
         RequestDraft draft = client.buildRequest("POST", "/gateway/waybill-sync",
                 Codec.utf8("{\"sm\":true}"), SecurityLevel.L2);
@@ -178,10 +177,10 @@ class WopSpecConformanceTest {
                 sign.protocolVersion() + "/" + sign.expiredSeconds(),
                 draft.method(), draft.path(), "", CanonicalRequest.canonicalHeaders(signed));
 
-        // 以默认 userId 验签：ZA 计算错位 → 必须失败
+        // 以协议固定值（≠appKey）验签：ZA 计算错位 → 必须失败
         assertFalse(AlgorithmSuite.parse(sign.securityReq()).signature().verify(
                 Codec.utf8(canonical), Codec.b64UrlDecode(sign.signature()), merchantPub,
-                Sm2Support.DEFAULT_USER_ID),
-                "同一签名用默认 userId 验签必须失败（证明 userId 实为 appKey）");
+                Codec.utf8("1234567812345678")),
+                "同一签名用非 appKey userId 验签必须失败（证明 userId 实为 appKey）");
     }
 }

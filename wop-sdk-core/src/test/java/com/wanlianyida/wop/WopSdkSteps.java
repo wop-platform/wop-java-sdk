@@ -2,7 +2,6 @@ package com.wanlianyida.wop;
 
 import com.wanlianyida.wop.crypto.*;
 import com.wanlianyida.wop.crypto.strategies.CipherResult;
-import com.wanlianyida.wop.crypto.strategies.Sm2Support;
 import io.cucumber.java.zh_cn.假如;
 import io.cucumber.java.zh_cn.当;
 import io.cucumber.java.zh_cn.那么;
@@ -475,7 +474,7 @@ public class WopSdkSteps {
             signed.forEach(n -> sub.put(n, headers.get(n)));
             String canonical = CanonicalRequest.build("v1/1800", "POST", path, "",
                     CanonicalRequest.canonicalHeaders(sub));
-            byte[] sig = suite.signature().sign(Codec.utf8(canonical), platformPriv, Sm2Support.DEFAULT_USER_ID);
+            byte[] sig = suite.signature().sign(Codec.utf8(canonical), platformPriv, Codec.utf8("1234567812345678"));
             headers.put("x-wop-sign", SignHeader.build(suite.securityReq(), 1800, signed, Codec.b64UrlEncode(sig)));
             return new PlatformResponse(headers, wire);
         }
