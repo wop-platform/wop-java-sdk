@@ -15,7 +15,7 @@ import java.security.PublicKey;
  * SM2 密钥形态守卫与转换（I5 合规边界 + BCEC ↔ BC 轻量参数）。
  * <p>
  * 仅接受 sm2p256v1 推荐曲线域（指纹整体比较，防非 SM2 EC 密钥静默参与国密运算）；
- * 非法输入抛 {@link IllegalArgumentException}，由策略包装为 {@link CryptoException} 或归入模糊失败。
+ * 非法输入抛 {@link IllegalArgumentException}，由策略包装为 {@link com.wanlianyida.wop.crypto.CryptoException} 或归入模糊失败。
  */
 public final class Sm2Support {
 
@@ -62,7 +62,7 @@ public final class Sm2Support {
         return Sm2DomainHolder.CURVE.decodePoint(point65);
     }
 
-    /** d 标量范围校验：1 <= d <= n-1。 */
+    /** d 标量范围校验：{@code 1 <= d <= n-1}。 */
     public static void requireValidD(BigInteger d) {
         if (d == null || d.signum() < 1 || d.compareTo(Sm2DomainHolder.N) >= 0) {
             throw new IllegalArgumentException("SM2 私钥 d 标量须在 [1, n-1]");
