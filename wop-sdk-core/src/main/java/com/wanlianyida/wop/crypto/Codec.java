@@ -19,6 +19,7 @@ public final class Codec {
 
     private static final char[] HEX = "0123456789abcdef".toCharArray();
 
+    /** 工具类禁实例化。 */
     private Codec() {
     }
 
@@ -105,6 +106,7 @@ public final class Codec {
         return out;
     }
 
+    /** 是否 base64url 字母表字符（A-Z / a-z / 0-9 / '-' / '_'）。 */
     private static boolean isB64UrlChar(char c) {
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
     }

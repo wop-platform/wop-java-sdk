@@ -23,6 +23,7 @@ public final class SignHeader {
                          List<String> signedHeaders, String signature) {
     }
 
+    /** 工具类禁实例化。 */
     private SignHeader() {
     }
 
@@ -61,6 +62,7 @@ public final class SignHeader {
                 + "/" + String.join(";", signedHeaders) + "/" + signatureB64Url;
     }
 
+    /** 解析并校验 expiredSeconds（须正整数，否则抛明确异常）。 */
     private static long parseExpiredSeconds(String raw) {
         long value;
         try {
@@ -74,6 +76,7 @@ public final class SignHeader {
         return value;
     }
 
+    /** 解析 signedHeaders 段（分号拆分，空段拒绝，返回不可变列表）。 */
     private static List<String> parseSignedHeaders(String raw) {
         if (raw.isEmpty()) {
             throw new WopSdkException("x-wop-sign signedHeaders 段为空");

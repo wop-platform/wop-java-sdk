@@ -39,6 +39,7 @@ public record DekPayload(String alg, byte[] key, byte[] iv) {
         }
     }
 
+    /** 调试串（key 恒隐去，防泄漏）。 */
     @Override
     public String toString() {
         return "DekPayload[alg=" + alg + ", key=" + Arrays.toString(new byte[0]) + "-hidden]";

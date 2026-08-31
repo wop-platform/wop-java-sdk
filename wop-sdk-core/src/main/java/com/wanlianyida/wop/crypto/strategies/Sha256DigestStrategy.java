@@ -13,9 +13,11 @@ public final class Sha256DigestStrategy implements DigestStrategy {
 
     private static final String ALGORITHM = "SHA-256";
 
+    /** 无状态单例，私有构造。 */
     private Sha256DigestStrategy() {
     }
 
+    /** 计算 SHA-256 摘要。 */
     @Override
     public byte[] digest(byte[] data) {
         try {
@@ -25,6 +27,7 @@ public final class Sha256DigestStrategy implements DigestStrategy {
         }
     }
 
+    /** 线上算法名 SHA-256。 */
     @Override
     public String algorithmName() {
         return ALGORITHM;

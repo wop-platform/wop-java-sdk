@@ -22,6 +22,7 @@ public final class Sm2Support {
     /** SM2 签名/验签默认 userId（与黄金向量一致，协议级常量）。 */
     public static final byte[] DEFAULT_USER_ID = "1234567812345678".getBytes();
 
+    /** 工具类禁实例化。 */
     private Sm2Support() {
     }
 
@@ -68,6 +69,7 @@ public final class Sm2Support {
         }
     }
 
+    /** BCEC 参数 → BC 轻量域参数（含 sm2p256v1 曲线守卫，I5）。 */
     private static ECDomainParameters domainOf(org.bouncycastle.jce.spec.ECParameterSpec spec) {
         ECDomainParameters domain = new ECDomainParameters(spec.getCurve(), spec.getG(), spec.getN());
         requireSm2Domain(domain);

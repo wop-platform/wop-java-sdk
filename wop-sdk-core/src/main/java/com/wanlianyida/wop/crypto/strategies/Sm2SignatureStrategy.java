@@ -32,9 +32,11 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
     /** 裸 r||s 定长（sm2p256v1 阶 n 为 256bit，r、s &lt; n 恒可装入 32B）。 */
     private static final int RS_BYTES = 32;
 
+    /** 无状态单例，私有构造。 */
     private Sm2SignatureStrategy() {
     }
 
+    /** 加签（BC 产出 DER 后转裸 r‖s 64B，D9）。 */
     @Override
     public byte[] sign(byte[] data, PrivateKey privateKey) {
         try {
@@ -48,6 +50,7 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         }
     }
 
+    /** 验签（长度 ≠ 64B 前置返回 false，spec §3.3①）。 */
     @Override
     public boolean verify(byte[] data, byte[] signature, PublicKey publicKey) {
         if (signature == null || signature.length != RS_BYTES * 2) {
@@ -64,6 +67,7 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         }
     }
 
+    /** 线上算法名 SM3withSM2。 */
     @Override
     public String algorithmName() {
         return ALGORITHM;
@@ -99,6 +103,7 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         return out;
     }
 
+    /** 字节拼接。 */
     private static byte[] concat(byte[] a, byte[] b) {
         byte[] out = new byte[a.length + b.length];
         System.arraycopy(a, 0, out, 0, a.length);

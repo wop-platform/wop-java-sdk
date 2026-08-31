@@ -24,9 +24,11 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    /** 无状态单例，私有构造。 */
     private Sm2KeyEncryptStrategy() {
     }
 
+    /** 包装（随机 k 走自管 CSPRNG；线上密文 C1C3C2 裸拼接）。 */
     @Override
     public byte[] encrypt(byte[] plainKey, PublicKey publicKey) {
         return encrypt(plainKey, publicKey, RANDOM);
@@ -45,6 +47,7 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
         }
     }
 
+    /** 解包（C1C3C2 顺序；旧国标 C1C2C3 密文必然失败）。 */
     @Override
     public byte[] decrypt(byte[] cipherText, PrivateKey privateKey) {
         try {
@@ -57,6 +60,7 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
         }
     }
 
+    /** 线上算法名 SM2。 */
     @Override
     public String algorithmName() {
         return ALGORITHM;

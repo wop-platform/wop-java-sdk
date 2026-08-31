@@ -6,6 +6,7 @@ package com.wanlianyida.wop.crypto.strategies;
  */
 public interface MessageEncryptStrategy {
 
+    /** 加密（IV 由策略内唯一生成点产出，密文与 IV 同生同传）。 */
     CipherResult encrypt(byte[] plain, byte[] key);
 
     /**
@@ -16,11 +17,15 @@ public interface MessageEncryptStrategy {
         return encrypt(plain, key);
     }
 
+    /** 解密。 */
     byte[] decrypt(byte[] cipher, byte[] iv, byte[] key);
 
+    /** 线上算法名。 */
     String algorithmName();
 
+    /** 密钥长度（字节）。 */
     int keyLength();
 
+    /** IV 长度（字节）。 */
     int ivLength();
 }

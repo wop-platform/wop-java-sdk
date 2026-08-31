@@ -13,11 +13,13 @@ public class WopSuiteException extends RuntimeException {
 
     private final Kind kind;
 
+    /** 以错误类别构造。 */
     public WopSuiteException(Kind kind, String message) {
         super(message);
         this.kind = kind;
     }
 
+    /** 错误类别（PARSE/UNSUPPORTED，均属对外明确）。 */
     public Kind kind() {
         return kind;
     }

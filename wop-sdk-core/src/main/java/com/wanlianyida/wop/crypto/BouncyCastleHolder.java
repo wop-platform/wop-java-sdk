@@ -14,13 +14,16 @@ public final class BouncyCastleHolder {
 
     private static final Provider PROVIDER = register();
 
+    /** 工具类禁实例化。 */
     private BouncyCastleHolder() {
     }
 
+    /** 已注册的 BC Provider（类加载即完成注册，进程级单例）。 */
     public static Provider provider() {
         return PROVIDER;
     }
 
+    /** 自建实例注册（同名已注册返回 -1 无害，始终使用自建实例）。 */
     private static Provider register() {
         Provider provider = new BouncyCastleProvider();
         Security.addProvider(provider);

@@ -17,6 +17,7 @@ public final class ContentDigest {
     public record Parsed(String label, String hex) {
     }
 
+    /** 工具类禁实例化。 */
     private ContentDigest() {
     }
 

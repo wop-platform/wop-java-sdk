@@ -35,19 +35,23 @@ public record VerifyResult(boolean ok, byte[] plaintext, Reason reason, String d
 
         private final String message;
 
+        /** 以对外文案构造（枚举常量唯一定义点）。 */
         Reason(String message) {
             this.message = message;
         }
 
+        /** 枚举的对外文案（I7：模糊类 reason 即全部对外语义）。 */
         public String message() {
             return message;
         }
     }
 
+    /** 成功结果工厂（包内；入向出口只经 ok/fail 构造，保证不可变纪律）。 */
     static VerifyResult ok(byte[] plaintext) {
         return new VerifyResult(true, plaintext, null, null);
     }
 
+    /** 失败结果工厂（包内；模糊类失败 detail 必须传 null）。 */
     static VerifyResult fail(Reason reason, String detail) {
         return new VerifyResult(false, null, reason, detail);
     }
@@ -60,6 +64,7 @@ public record VerifyResult(boolean ok, byte[] plaintext, Reason reason, String d
         return detail == null ? reason.message() : reason.message() + ": " + detail;
     }
 
+    /** 简要结果串（成功/失败与文案，不含明文）。 */
     @Override
     public String toString() {
         return ok ? "VerifyResult[ok]"

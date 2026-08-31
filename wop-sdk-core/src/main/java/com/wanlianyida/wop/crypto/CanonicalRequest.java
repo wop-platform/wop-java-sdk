@@ -23,6 +23,7 @@ import java.util.TreeMap;
  */
 public final class CanonicalRequest {
 
+    /** 工具类禁实例化。 */
     private CanonicalRequest() {
     }
 

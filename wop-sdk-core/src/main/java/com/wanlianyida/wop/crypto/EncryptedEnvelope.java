@@ -13,6 +13,7 @@ public final class EncryptedEnvelope {
     private static final String PREFIX = "{\"encrypted\":\"";
     private static final String SUFFIX = "\"}";
 
+    /** 工具类禁实例化。 */
     private EncryptedEnvelope() {
     }
 

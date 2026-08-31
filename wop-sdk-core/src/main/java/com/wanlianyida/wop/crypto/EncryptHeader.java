@@ -14,11 +14,13 @@ public final class EncryptHeader {
     /** 解析结果；level=L0 时 dek 为 null。 */
     public record Parsed(String level, String dek) {
 
+        /** 是否 L2 全文加密。 */
         public boolean isEncrypted() {
             return "L2".equals(level);
         }
     }
 
+    /** 工具类禁实例化。 */
     private EncryptHeader() {
     }
 
