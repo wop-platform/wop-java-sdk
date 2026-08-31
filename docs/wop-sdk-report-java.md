@@ -217,3 +217,8 @@ ab986e6 test: 故障注入场景覆盖（协议层+双适配器网络层）；do
 **已按用户决策修正**：`autoPublish` true→false（首次发版人工核对后手动 Publish）；release.yml 注释验证路径改为 DNS TXT（原注释写的 GitHub 仓库验证不适用于 com.wanlianyida）。
 
 **发版前唯一阻断项**：Central Portal namespace `com.wanlianyida` 的 DNS TXT 验证（需 wanlianyida.com 域名控制权，操作指引见会话回复）。
+
+### 4. 发版操作手册（文档化）
+
+- `docs/release-guide.md`：首次发版全流程（阶段一凭据准备 DNS TXT/token/GPG/Secrets → 阶段二推仓打 tag 人工核对 Publish → 阶段三发版后验证与版本滚动），含发版前检查结论表、风险与边界（namespace 永久绑定域名、Publish 前为最后反悔窗口）、本地预验命令
+- `CONTRIBUTING.md` §8 与之互链，并同步修正：DNS TXT 验证路径说明、autoPublish=false 人工核对步骤
