@@ -497,8 +497,12 @@ class TestCodeupEndpointFallback:
         import urllib.parse as up
         msg = str(e.value)
         urls = re.findall(r"https?://[^\s'\"<>]+", msg)
-        hosts = [up.urlparse(u).hostname for u in urls]
-        assert "openapi-rdc.aliyuncs.com" in hosts
+        parsed_hosts = []
+        for u in urls:
+            p = up.urlparse(u)
+            if p.scheme in ("http", "https") and p.netloc and p.hostname:
+                parsed_hosts.append(p.hostname.lower().rstrip("."))
+        assert any(h == "openapi-rdc.aliyuncs.com" for h in parsed_hosts)
 
 
 class TestCli:
