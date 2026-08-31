@@ -8,6 +8,7 @@ import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
 import org.bouncycastle.crypto.params.ECPublicKeyParameters;
+import org.bouncycastle.crypto.params.ParametersWithID;
 import org.bouncycastle.crypto.signers.SM2Signer;
 
 import java.io.IOException;
@@ -20,8 +21,10 @@ import java.util.Arrays;
  * 国密签名策略：SM3withSM2。
  * <p>
  * 线上编码 = <b>裸 r‖s 固定 64 字节</b>（D9：线上禁止 DER/ASN.1）；JVM 内部经 BC
- * {@link SM2Signer}（DER 编码，userId 默认 1234567812345678）产出后转换。
+ * {@link SM2Signer}（DER 编码）产出后转换。
  * 验签长度 ≠ 64 一律 false（spec §3.3① 定长前置校验）。
+ * userId 参与签名/验签（D14）：SM2 国标 ZA 杂凑含 userId；缺省用
+ * {@link Sm2Support#DEFAULT_USER_ID}（与黄金向量一致）。
  */
 public final class Sm2SignatureStrategy implements SignatureStrategy {
 
@@ -36,13 +39,13 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
     private Sm2SignatureStrategy() {
     }
 
-    /** 加签（BC 产出 DER 后转裸 r‖s 64B，D9）。 */
+    /** 加签（BC 产出 DER 后转裸 r‖s 64B，D9；userId 贯通 D14）。 */
     @Override
-    public byte[] sign(byte[] data, PrivateKey privateKey) {
+    public byte[] sign(byte[] data, PrivateKey privateKey, byte[] userId) {
         try {
             ECPrivateKeyParameters params = Sm2Support.toPrivateParams(privateKey);
             SM2Signer signer = new SM2Signer();
-            signer.init(true, params);
+            signer.init(true, withId(params, userId));
             signer.update(data, 0, data.length);
             return derToRs(signer.generateSignature());
         } catch (Exception e) {
@@ -50,16 +53,16 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         }
     }
 
-    /** 验签（长度 ≠ 64B 前置返回 false，spec §3.3①）。 */
+    /** 验签（长度 ≠ 64B 前置返回 false，spec §3.3①；userId 贯通 D14）。 */
     @Override
-    public boolean verify(byte[] data, byte[] signature, PublicKey publicKey) {
+    public boolean verify(byte[] data, byte[] signature, PublicKey publicKey, byte[] userId) {
         if (signature == null || signature.length != RS_BYTES * 2) {
             return false;
         }
         try {
             ECPublicKeyParameters params = Sm2Support.toPublicParams(publicKey);
             SM2Signer verifier = new SM2Signer();
-            verifier.init(false, params);
+            verifier.init(false, withId(params, userId));
             verifier.update(data, 0, data.length);
             return verifier.verifySignature(rsToDer(signature));
         } catch (Exception e) {
@@ -71,6 +74,12 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
     @Override
     public String algorithmName() {
         return ALGORITHM;
+    }
+
+    /** userId 空 → 协议默认（黄金向量一致）；非空包 {@link ParametersWithID}。 */
+    private static ParametersWithID withId(org.bouncycastle.crypto.CipherParameters params, byte[] userId) {
+        byte[] id = userId == null ? Sm2Support.DEFAULT_USER_ID : userId;
+        return new ParametersWithID(params, id);
     }
 
     /** BC 签名（DER SEQUENCE{r, s}）→ 裸 r||s 64B（D9 线上编码）。 */

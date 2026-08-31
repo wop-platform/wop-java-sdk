@@ -1,8 +1,8 @@
 package com.wanlianyida.wop.crypto;
 
-import com.wanlianyida.wop.WopSdkException;
-
+import com.wanlianyida.wop.WopError;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import java.util.List;
 
@@ -14,8 +14,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * DEK 载荷（alg$key$iv）与 x-wop-sign / x-wop-encrypt 头编解码。
+ * §2.2：所有解析失败路径归类 parse（肯定式断言 category）。
  */
 class ProtocolHeaderTest {
+
+    /** 解析类失败：类型 WopError + category=parse 双重断言（spec:2.2）。 */
+    private static WopError parseError(Executable exec) {
+        WopError e = assertThrows(WopError.class, exec);
+        assertEquals(WopError.Category.parse, e.category());
+        return e;
+    }
 
     // ==================== DekPayload ====================
 
@@ -41,13 +49,13 @@ class ProtocolHeaderTest {
 
     @Test
     void dekPayloadDecodeRejectsMalformed() {
-        assertThrows(WopSdkException.class, () -> DekPayload.decode(null));
-        assertThrows(WopSdkException.class, () -> DekPayload.decode(""));
-        assertThrows(WopSdkException.class, () -> DekPayload.decode("AES-256-GCM"));
-        assertThrows(WopSdkException.class, () -> DekPayload.decode("AES-256-GCM$key"));             // 缺 iv
-        assertThrows(WopSdkException.class, () -> DekPayload.decode("AES-256-GCM$key$iv$extra"));    // 段数
-        assertThrows(WopSdkException.class, () -> DekPayload.decode("AES-256-GCM$ke+y$iv"));         // 非法 b64url
-        assertThrows(WopSdkException.class, () -> DekPayload.decode("$key$iv"));                     // alg 空
+        parseError(() -> DekPayload.decode(null));
+        parseError(() -> DekPayload.decode(""));
+        parseError(() -> DekPayload.decode("AES-256-GCM"));
+        parseError(() -> DekPayload.decode("AES-256-GCM$key"));             // 缺 iv
+        parseError(() -> DekPayload.decode("AES-256-GCM$key$iv$extra"));    // 段数
+        parseError(() -> DekPayload.decode("AES-256-GCM$ke+y$iv"));         // 非法 b64url
+        parseError(() -> DekPayload.decode("$key$iv"));                     // alg 空
     }
 
     // ==================== SignHeader ====================
@@ -74,27 +82,26 @@ class ProtocolHeaderTest {
     }
     @Test
     void signHeaderRejectsMalformed() {
-        assertThrows(WopSdkException.class, () -> SignHeader.parse(null));
-        assertThrows(WopSdkException.class, () -> SignHeader.parse(""));
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("   "));
+        parseError(() -> SignHeader.parse(null));
+        parseError(() -> SignHeader.parse(""));
+        parseError(() -> SignHeader.parse("   "));
         // 缺空格分隔
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256v1/1800/a/b"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256v1/1800/a/b"));
         // 段数不足/超数
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/sig"));
-        assertThrows(WopSdkException.class,
-                () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/b/extra"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/sig"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/b/extra"));
         // 协议版本
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256 v2/1800/a/b"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v2/1800/a/b"));
         // expiredSeconds 非数字/非正
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/x/a/b"));
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/0/a/b"));
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/-5/a/b"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/x/a/b"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/0/a/b"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/-5/a/b"));
         // signedHeaders 空段
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800//b"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800//b"));
         // signature 空
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/"));
         // 签名含 '/'（b64url 非法）
-        assertThrows(WopSdkException.class, () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/b/c"));
+        parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/b/c"));
     }
 
     @Test
@@ -127,13 +134,13 @@ class ProtocolHeaderTest {
 
     @Test
     void encryptHeaderRejectsMalformed() {
-        assertThrows(WopSdkException.class, () -> EncryptHeader.parse("L1"));
-        assertThrows(WopSdkException.class, () -> EncryptHeader.parse("l0"));
-        assertThrows(WopSdkException.class, () -> EncryptHeader.parse("L2"));                 // L2 缺 dek
-        assertThrows(WopSdkException.class, () -> EncryptHeader.parse("L2;dek="));            // dek 空
-        assertThrows(WopSdkException.class, () -> EncryptHeader.parse("L2;foo=abc"));         // 未知参数
-        assertThrows(WopSdkException.class, () -> EncryptHeader.parse("L0;dek=abc"));         // L0 带 dek
-        assertThrows(WopSdkException.class, () -> EncryptHeader.parse("L2;dek=ab=c"));        // dek 带 = 
-        assertThrows(WopSdkException.class, () -> EncryptHeader.parse(" L2;dek=abc "));       // 空白包裹
+        parseError(() -> EncryptHeader.parse("L1"));
+        parseError(() -> EncryptHeader.parse("l0"));
+        parseError(() -> EncryptHeader.parse("L2"));                 // L2 缺 dek
+        parseError(() -> EncryptHeader.parse("L2;dek="));            // dek 空
+        parseError(() -> EncryptHeader.parse("L2;foo=abc"));         // 未知参数
+        parseError(() -> EncryptHeader.parse("L0;dek=abc"));         // L0 带 dek
+        parseError(() -> EncryptHeader.parse("L2;dek=ab=c"));        // dek 带 =
+        parseError(() -> EncryptHeader.parse(" L2;dek=abc "));       // 空白包裹
     }
 }

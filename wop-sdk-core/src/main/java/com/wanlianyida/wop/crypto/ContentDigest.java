@@ -1,6 +1,6 @@
 package com.wanlianyida.wop.crypto;
 
-import com.wanlianyida.wop.WopSdkException;
+import com.wanlianyida.wop.WopError;
 
 /**
  * F4 x-wop-content-digest（D2 全语义）：
@@ -29,26 +29,26 @@ public final class ContentDigest {
         return suite.digestLabel() + " " + Codec.hexLower(suite.digest().digest(wireBody));
     }
 
-    /** 严格解析：标签 = 套件期望标签（I5），恰一空格，64 位小写 hex；violation 抛明确异常。 */
+    /** 严格解析：标签 = 套件期望标签（I5），恰一空格，64 位小写 hex；violation 抛 {@link WopError#parse}。 */
     public static Parsed parse(String headerValue, AlgorithmSuite suite) {
         if (headerValue == null || headerValue.isEmpty()) {
-            throw new WopSdkException("x-wop-content-digest 为空");
+            throw WopError.parse("x-wop-content-digest 为空");
         }
         int space = headerValue.indexOf(' ');
         if (space < 0) {
-            throw new WopSdkException("x-wop-content-digest 缺少算法标签与 hex 的空格分隔: '" + headerValue + "'");
+            throw WopError.parse("x-wop-content-digest 缺少算法标签与 hex 的空格分隔: '" + headerValue + "'");
         }
         if (space != headerValue.lastIndexOf(' ')) {
-            throw new WopSdkException("x-wop-content-digest 必须恰好一个空格（D2）: '" + headerValue + "'");
+            throw WopError.parse("x-wop-content-digest 必须恰好一个空格（D2）: '" + headerValue + "'");
         }
         String label = headerValue.substring(0, space);
         String hex = headerValue.substring(space + 1);
         if (!label.equals(suite.digestLabel())) {
-            throw new WopSdkException("x-wop-content-digest 标签 '" + label + "' 与套件族不符（期望 "
+            throw WopError.parse("x-wop-content-digest 标签 '" + label + "' 与套件族不符（期望 "
                     + suite.digestLabel() + "，跨族拒绝 I5）");
         }
         if (!Codec.isLowerHex64(hex)) {
-            throw new WopSdkException("x-wop-content-digest hex 段须为 64 位小写十六进制（D2/F5）: '" + hex + "'");
+            throw WopError.parse("x-wop-content-digest hex 段须为 64 位小写十六进制（D2/F5）: '" + hex + "'");
         }
         return new Parsed(label, hex);
     }

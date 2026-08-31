@@ -72,7 +72,9 @@ class CoverageEdge3Test {
 
     @Test
     void dekPayloadEncodeNullPayload() {
-        assertThrows(WopSdkException.class, () -> DekPayload.encode(null));
+        // spec:2.2 配置/解析错误闭集：DEK 载荷编码为 parse 类
+        WopError ex = assertThrows(WopError.class, () -> DekPayload.encode(null));
+        assertEquals(WopError.Category.parse, ex.category());
     }
 
     @Test
@@ -80,19 +82,19 @@ class CoverageEdge3Test {
         byte[] k = validPayload().key();
         byte[] iv = validPayload().iv();
         // alg null / blank
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload(null, k, iv)));
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("   ", k, iv)));
         // key null / empty
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES256-GCM", null, iv)));
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES256-GCM", new byte[0], iv)));
         // iv null / empty
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES256-GCM", k, null)));
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES256-GCM", k, new byte[0])));
     }
 
@@ -112,17 +114,17 @@ class CoverageEdge3Test {
     @Test
     void dekPayloadDecodeMalformed() {
         // null / 空
-        assertThrows(WopSdkException.class, () -> DekPayload.decode(null));
-        assertThrows(WopSdkException.class, () -> DekPayload.decode(""));
+        assertThrows(WopError.class, () -> DekPayload.decode(null));
+        assertThrows(WopError.class, () -> DekPayload.decode(""));
         // 段数错误（2 段 / 4 段）
-        assertThrows(WopSdkException.class, () -> DekPayload.decode("a$b"));
-        assertThrows(WopSdkException.class, () -> DekPayload.decode("a$b$c$d"));
+        assertThrows(WopError.class, () -> DekPayload.decode("a$b"));
+        assertThrows(WopError.class, () -> DekPayload.decode("a$b$c$d"));
         // alg 段空白
-        assertThrows(WopSdkException.class, () -> DekPayload.decode("$AAAA$BBBB"));
+        assertThrows(WopError.class, () -> DekPayload.decode("$AAAA$BBBB"));
         // key/iv 段非法 base64url（catch 分支）
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.decode("AES256-GCM$!!!$AAAA"));
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.decode("AES256-GCM$AAAA$==="));
     }
 
@@ -136,7 +138,7 @@ class CoverageEdge3Test {
         assertNull(draft.wireBody());
         assertNull(draft.headers().get("x-wop-content-digest"));
         // L2 + 空数组：拒绝（L2 需要非空 body）
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> client.buildRequest("POST", "/gateway/test", new byte[0], SecurityLevel.L2));
     }
 }

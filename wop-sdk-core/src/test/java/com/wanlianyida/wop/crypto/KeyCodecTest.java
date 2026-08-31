@@ -1,5 +1,5 @@
 package com.wanlianyida.wop.crypto;
-import com.wanlianyida.wop.WopSdkException;
+import com.wanlianyida.wop.WopError;
 import org.junit.jupiter.api.Test;
 
 
@@ -73,31 +73,32 @@ class KeyCodecTest {
 
     @Test
     void rejectsRsaLengthMismatchWithSuite() {
-        // 4096 密钥喂 3072 套件 → 明确拒绝（支持类）
-        assertThrows(WopSdkException.class, () ->
+        // 4096 密钥喂 3072 套件 → 明确拒绝（支持类，configuration 闭集）
+        WopError ex1 = assertThrows(WopError.class, () ->
                 KeyCodec.parsePublicKey(TestVectors.keys("rsa4096").path("publicSpkiB64").asText(), RSA3072));
-        assertThrows(WopSdkException.class, () ->
+        assertEquals(WopError.Category.configuration, ex1.category());
+        assertThrows(WopError.class, () ->
                 KeyCodec.parsePrivateKey(TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA4096));
     }
 
     @Test
     void rejectsBlankAndGarbageKeys() {
-        assertThrows(WopSdkException.class, () -> KeyCodec.parsePublicKey(null, RSA3072));
-        assertThrows(WopSdkException.class, () -> KeyCodec.parsePrivateKey("  ", RSA3072));
-        assertThrows(WopSdkException.class, () -> KeyCodec.parsePublicKey("!!!not-base64!!!", RSA3072));
-        assertThrows(WopSdkException.class, () -> KeyCodec.parsePrivateKey("AAAA", SM2));
-        assertThrows(WopSdkException.class, () ->
+        assertThrows(WopError.class, () -> KeyCodec.parsePublicKey(null, RSA3072));
+        assertThrows(WopError.class, () -> KeyCodec.parsePrivateKey("  ", RSA3072));
+        assertThrows(WopError.class, () -> KeyCodec.parsePublicKey("!!!not-base64!!!", RSA3072));
+        assertThrows(WopError.class, () -> KeyCodec.parsePrivateKey("AAAA", SM2));
+        assertThrows(WopError.class, () ->
                 KeyCodec.parsePublicKey(Base64.getEncoder().encodeToString(new byte[40]), SM2));
     }
 
     @Test
     void rejectsCrossFamilyKeyMaterial() {
         // RSA 密钥喂 SM2 套件 / SM2 密钥喂 RSA 套件 → 拒绝
-        assertThrows(WopSdkException.class, () ->
+        assertThrows(WopError.class, () ->
                 KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), SM2));
-        assertThrows(WopSdkException.class, () ->
+        assertThrows(WopError.class, () ->
                 KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), RSA3072));
-        assertThrows(WopSdkException.class, () ->
+        assertThrows(WopError.class, () ->
                 KeyCodec.parsePrivateKey(TestVectors.keys("sm2").path("privateDB64").asText(), RSA3072));
     }
 
@@ -107,13 +108,13 @@ class KeyCodecTest {
         byte[] bogusPoint = new byte[65];
         bogusPoint[0] = 0x04;
         bogusPoint[64] = 0x01;
-        assertThrows(WopSdkException.class, () ->
+        assertThrows(WopError.class, () ->
                 KeyCodec.parsePublicKey(Base64.getEncoder().encodeToString(bogusPoint), SM2));
         byte[] d = new byte[32];
         d[31] = 0x01; // d = 1 合法；改 n 越界用全 FF（> n）
         byte[] over = new byte[32];
         java.util.Arrays.fill(over, (byte) 0xFF);
-        assertThrows(WopSdkException.class, () ->
+        assertThrows(WopError.class, () ->
                 KeyCodec.parsePrivateKey(Base64.getEncoder().encodeToString(over), SM2));
         assertEquals(1, new java.math.BigInteger(1, d).intValueExact());
     }

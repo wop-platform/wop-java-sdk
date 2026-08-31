@@ -1,6 +1,6 @@
 package com.wanlianyida.wop.crypto;
 
-import com.wanlianyida.wop.WopSdkException;
+import com.wanlianyida.wop.WopError;
 
 /**
  * x-wop-encrypt 加密指令头编解码。
@@ -32,26 +32,26 @@ public final class EncryptHeader {
         int semicolon = header.indexOf(';');
         String level = semicolon < 0 ? header : header.substring(0, semicolon);
         if (!"L0".equals(level) && !"L2".equals(level)) {
-            throw new WopSdkException("x-wop-encrypt 加密指令解析失败：level 仅支持 L0/L2，实际 '" + level + "'");
+            throw WopError.parse("x-wop-encrypt 加密指令解析失败：level 仅支持 L0/L2，实际 '" + level + "'");
         }
         if (semicolon < 0) {
             if ("L2".equals(level)) {
-                throw new WopSdkException("L2 加密指令缺少 dek 段");
+                throw WopError.parse("L2 加密指令缺少 dek 段");
             }
             return new Parsed("L0", null);
         }
         String param = header.substring(semicolon + 1);
         if ("L0".equals(level)) {
-            throw new WopSdkException("x-wop-encrypt L0 不携带参数: '" + header + "'");
+            throw WopError.parse("x-wop-encrypt L0 不携带参数: '" + header + "'");
         }
         if (!param.startsWith("dek=") || param.length() <= 4) {
-            throw new WopSdkException("L2 加密指令缺少 dek 段: '" + header + "'");
+            throw WopError.parse("L2 加密指令缺少 dek 段: '" + header + "'");
         }
         String dek = param.substring(4);
         try {
             Codec.b64UrlDecode(dek);
         } catch (IllegalArgumentException e) {
-            throw new WopSdkException("x-wop-encrypt dek 段非合法 base64url 无填充: " + e.getMessage(), e);
+            throw WopError.parse("x-wop-encrypt dek 段非合法 base64url 无填充: " + e.getMessage(), e);
         }
         return new Parsed("L2", dek);
     }

@@ -1,6 +1,6 @@
 package com.wanlianyida.wop.crypto;
 
-import com.wanlianyida.wop.WopSdkException;
+import com.wanlianyida.wop.WopError;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.jupiter.api.Test;
@@ -75,7 +75,8 @@ class CoverageCloseTest {
     void rsaSignatureRejectsNullData() {
         java.security.PrivateKey priv = KeyCodec.parsePrivateKey(
                 TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA);
-        assertThrows(CryptoException.class, () -> RsaPkcs1SignatureStrategy.INSTANCE.sign(null, priv));
+        // RSA 忽略 userId，任意字节
+        assertThrows(CryptoException.class, () -> RsaPkcs1SignatureStrategy.INSTANCE.sign(null, priv, Codec.utf8("x")));
     }
 
     @Test
@@ -86,7 +87,7 @@ class CoverageCloseTest {
                 TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
         assertThrows(CryptoException.class, () -> Sm2KeyEncryptStrategy.INSTANCE.encrypt(null, pub));
         assertThrows(CryptoException.class, () -> Sm2KeyEncryptStrategy.INSTANCE.decrypt(null, priv));
-        assertThrows(CryptoException.class, () -> Sm2SignatureStrategy.INSTANCE.sign(null, priv));
+        assertThrows(CryptoException.class, () -> Sm2SignatureStrategy.INSTANCE.sign(null, priv, Sm2Support.DEFAULT_USER_ID));
     }
 
     @Test
@@ -96,9 +97,9 @@ class CoverageCloseTest {
         generator.initialize(new ECGenParameterSpec("secp256r1"));
         var pair = generator.generateKeyPair();
         assertThrows(CryptoException.class,
-                () -> Sm2SignatureStrategy.INSTANCE.verify(Codec.utf8("m"), new byte[64], pair.getPublic()));
+                () -> Sm2SignatureStrategy.INSTANCE.verify(Codec.utf8("m"), new byte[64], pair.getPublic(), Sm2Support.DEFAULT_USER_ID));
         assertThrows(CryptoException.class,
-                () -> Sm2SignatureStrategy.INSTANCE.sign(Codec.utf8("m"), pair.getPrivate()));
+                () -> Sm2SignatureStrategy.INSTANCE.sign(Codec.utf8("m"), pair.getPrivate(), Sm2Support.DEFAULT_USER_ID));
         assertThrows(CryptoException.class,
                 () -> Sm2KeyEncryptStrategy.INSTANCE.encrypt(Codec.utf8("m"), pair.getPublic()));
         assertThrows(CryptoException.class,
@@ -125,12 +126,12 @@ class CoverageCloseTest {
 
     @Test
     void dekPayloadEncodeRejectsIncompleteFields() {
-        assertThrows(WopSdkException.class, () -> DekPayload.encode(null));
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class, () -> DekPayload.encode(null));
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("", new byte[16], new byte[12])));
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES-256-GCM", new byte[0], new byte[12])));
-        assertThrows(WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES-256-GCM", new byte[16], null)));
         // toString 不泄密钥
         assertFalse(DekPayload.decode(TestVectors.firstById("dekPayload", "dek-rsa")
@@ -139,12 +140,12 @@ class CoverageCloseTest {
 
     @Test
     void encryptedEnvelopeRejectsMalformed() {
-        assertThrows(WopSdkException.class, () -> EncryptedEnvelope.cipherOf(null));
-        assertThrows(WopSdkException.class, () -> EncryptedEnvelope.cipherOf(new byte[0]));
-        assertThrows(WopSdkException.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("not-json")));
-        assertThrows(WopSdkException.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"ab+c\"}")));
-        assertThrows(WopSdkException.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"\"}")));
-        assertThrows(WopSdkException.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"AAA\"}x")));
+        assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(null));
+        assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(new byte[0]));
+        assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("not-json")));
+        assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"ab+c\"}")));
+        assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"\"}")));
+        assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"AAA\"}x")));
         // 合法带空白包裹
         assertTrue(EncryptedEnvelope.cipherOf(Codec.utf8("  {\"encrypted\":\"AAEC\"}  ")).length == 3);
         // roundtrip
@@ -172,10 +173,10 @@ class CoverageCloseTest {
         // 65B 但首字节非 04 → 走 SPKI 解析失败
         byte[] notPoint = new byte[65];
         notPoint[0] = 0x02;
-        assertThrows(WopSdkException.class, () -> KeyCodec.parsePublicKey(
+        assertThrows(WopError.class, () -> KeyCodec.parsePublicKey(
                 java.util.Base64.getEncoder().encodeToString(notPoint), SM2));
         // PEM 无 body
-        assertThrows(WopSdkException.class, () -> KeyCodec.stripPem("-----BEGIN PUBLIC KEY-----x-----END PUBLIC KEY-----"));
+        assertThrows(WopError.class, () -> KeyCodec.stripPem("-----BEGIN PUBLIC KEY-----x-----END PUBLIC KEY-----"));
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.wanlianyida.wop.crypto.KeyCodec;
 import com.wanlianyida.wop.crypto.SignHeader;
 import com.wanlianyida.wop.crypto.TestVectors;
 import com.wanlianyida.wop.crypto.strategies.CipherResult;
+import com.wanlianyida.wop.crypto.strategies.Sm2Support;
 import org.junit.jupiter.api.Test;
 
 import java.security.PrivateKey;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * F6 校验顺序 + I7 模糊化 + D2/I1/I5 负向量：verifyResponse / verifyCallback。
  * 平台侧响应由 PlatformRig 按协议拼装（平台私钥加签、商户公钥包 DEK）。
+ * spec:D14：平台侧验签/签名 userId 与请求身份同源（Sm2Support.DEFAULT_USER_ID 仅用于平台侧装配）。
  */
 class WopClientVerifyTest {
 
@@ -108,7 +110,7 @@ class WopClientVerifyTest {
             signed.forEach(n -> sub.put(n, headers.get(n)));
             String canonical = CanonicalRequest.build("v1/1800", "POST", path, "",
                     CanonicalRequest.canonicalHeaders(sub));
-            byte[] sig = suite.signature().sign(Codec.utf8(canonical), platformPriv);
+            byte[] sig = suite.signature().sign(Codec.utf8(canonical), platformPriv, Sm2Support.DEFAULT_USER_ID);
             headers.put("x-wop-sign", SignHeader.build(suite.securityReq(), 1800, signed,
                     Codec.b64UrlEncode(sig)));
         }
@@ -315,23 +317,18 @@ class WopClientVerifyTest {
         VerifyResult result = client4096.verifyResponse(resp.headers(), resp.wire(), "/p4096");
         assertTrue(result.ok(), () -> result.toString());
         assertArrayEquals(plain, result.plaintext());
-        // 签名恒 683 字符（b64url）
         assertEquals(683, SignHeader.parse(resp.headers().get("x-wop-sign")).signature().length());
     }
-
-    // ==================== L2 解密类（I7 模糊）与一致性类（明确） ====================
 
     @Test
     void l2TamperedCiphertextFailsVaguely() {
         byte[] plain = Codec.utf8("plain");
-
         PlatformResponse resp = RSA_RIG.respond("/p", plain, true);
         byte[] wire = resp.wire().clone();
         // 随机 DEK 下尾段 base64url 字符不定，^0x01 有 ~9% 概率翻出字母表外（A→@ 等），
         // 落点漂移到信封解码失败（INVALID_ENCRYPTED_BODY）而非解密失败。改为替换成
         // 确定的另一合法字母表字符（'B'↔'C'），保证直达 AES-GCM 解密 → 确定性 DECRYPT_FAILED。
         wire[wire.length - 3] = wire[wire.length - 3] == 'B' ? (byte) 'C' : (byte) 'B';
-        // 重算 digest 并重签，直达解密层
         resp.headers().put("x-wop-content-digest", ContentDigest.build(RSA, wire));
         reSignWith(resp.headers(), "/p", List.of(
                 "x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"));
@@ -354,7 +351,6 @@ class WopClientVerifyTest {
 
     @Test
     void l2DekAlgMismatchExplicit() {
-        // 一致性类：SM4-GCM dek 出现在 RSA 套件响应（商户公钥正常包装，签名有效）
         byte[] plain = Codec.utf8("plain");
         PlatformResponse resp = RSA_RIG.respond("/p", plain, true);
         byte[] sm4Key = Codec.b64UrlDecode(TestVectors.input("sm4KeyB64u"));
@@ -394,12 +390,9 @@ class WopClientVerifyTest {
     @Test
     void l2EmptyBodyRejected() {
         PlatformResponse resp = RSA_RIG.respond("/p", Codec.utf8("x"), true);
-        // 空 body + L2 头：digest 头在场即拒（D2）
         assertEquals(VerifyResult.Reason.INVALID_DIGEST_HEADER,
                 client.verifyResponse(resp.headers(), new byte[0], "/p").reason());
     }
-
-    // ==================== SM2 套件端到端 ====================
 
     @Test
     void sm2SuiteResponseRoundtrip() {
@@ -408,14 +401,11 @@ class WopClientVerifyTest {
         WopClient sm2Client = WopClient.builder().appKey("app_sm2").suite("WOP-SM2-SM3")
                 .merchantPrivateKey(sm2Priv).platformPublicKey(sm2Pub).build();
         PlatformRig rig = new PlatformRig("WOP-SM2-SM3", sm2Priv, sm2Pub);
-
         byte[] plain = Codec.utf8("{\"sm\":true}");
         PlatformResponse resp = rig.respond("/cb", plain, true);
         VerifyResult result = sm2Client.verifyCallback(resp.headers(), resp.wire(), "/cb");
         assertTrue(result.ok(), () -> result.toString());
         assertArrayEquals(plain, result.plaintext());
-
-        // 63B 签名 → 定长前置校验，协议类明确拒绝（interop n07）
         SignHeader.Parsed parsed = SignHeader.parse(resp.headers().get("x-wop-sign"));
         byte[] sig = Codec.b64UrlDecode(parsed.signature());
         resp.headers().put("x-wop-sign", SignHeader.build("WOP-SM2-SM3", 1800, parsed.signedHeaders(),
@@ -436,19 +426,15 @@ class WopClientVerifyTest {
         PlatformRig rig = new PlatformRig("WOP-SM2-SM3", sm2Priv, sm2Pub);
         byte[] plain = Codec.utf8("{\"sm\":true}");
         PlatformResponse resp = rig.respond("/cb", plain, false);
-
         java.lang.reflect.Field keyField = WopClient.class.getDeclaredField("platformPublicKey");
         keyField.setAccessible(true);
         keyField.set(sm2Client, KeyCodec.parsePublicKey(
                 TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA));
-
         VerifyResult result = sm2Client.verifyCallback(resp.headers(), resp.wire(), "/cb");
         assertFalse(result.ok());
         assertEquals(VerifyResult.Reason.SIGNATURE_FAILED, result.reason());
         assertNull(result.detail(), "策略内部异常不应泄露细节（I7）");
     }
-
-    // ==================== 辅助：平台私钥重签 ====================
 
     private void reSignWith(Map<String, String> headers, String path, List<String> signedNames) {
         PrivateKey platformPriv = KeyCodec.parsePrivateKey(PLATFORM_PRIV, RSA);
@@ -456,7 +442,8 @@ class WopClientVerifyTest {
         signedNames.forEach(n -> sub.put(n, headers.get(n)));
         String canonical = CanonicalRequest.build("v1/1800", "POST", path, "",
                 CanonicalRequest.canonicalHeaders(sub));
-        byte[] sig = RSA.signature().sign(Codec.utf8(canonical), platformPriv);
+        // spec:D14：平台侧重签 userId 与装配一致
+        byte[] sig = RSA.signature().sign(Codec.utf8(canonical), platformPriv, Sm2Support.DEFAULT_USER_ID);
         headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800, signedNames,
                 Codec.b64UrlEncode(sig)));
     }

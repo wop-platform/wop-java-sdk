@@ -1,6 +1,6 @@
 package com.wanlianyida.wop.crypto;
 
-import com.wanlianyida.wop.WopSdkException;
+import com.wanlianyida.wop.WopError;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
@@ -71,8 +71,10 @@ class ContentDigestTest {
                 case "header-crossfamily", "header-double-space",
                      "header-uppercase-hex", "header-wrong-hex-len" -> {
                     assertEquals("reject", expect, id + " expect 哨兵");
-                    WopSdkException ex = assertThrows(WopSdkException.class,
+                    WopError ex = assertThrows(WopError.class,
                             () -> ContentDigest.parse(value, suite), id + " 须拒收");
+                    // spec:2.2 解析错误闭集：digest 头违规归 parse
+                    assertEquals(WopError.Category.parse, ex.category());
                     // 错误明确指出格式问题（解析类，非模糊）
                     assertTrue(ex.getMessage() != null && !ex.getMessage().isBlank());
                 }
@@ -105,20 +107,20 @@ class ContentDigestTest {
 
     @Test
     void parseRejectsBlankAndMalformed() {
-        assertThrows(WopSdkException.class, () -> ContentDigest.parse(null, RSA));
-        assertThrows(WopSdkException.class, () -> ContentDigest.parse("", RSA));
-        assertThrows(WopSdkException.class, () -> ContentDigest.parse("sha-256", RSA));       // 无空格
-        assertThrows(WopSdkException.class, () -> ContentDigest.parse("sha-256 ", RSA));      // 空 hex
-        assertThrows(WopSdkException.class, () -> ContentDigest.parse(" sha-256 ab", RSA));   // 前导空格
-        assertThrows(WopSdkException.class, () -> ContentDigest.parse("sha-256\t4cf7", RSA)); // 制表符
+        assertThrows(WopError.class, () -> ContentDigest.parse(null, RSA));
+        assertThrows(WopError.class, () -> ContentDigest.parse("", RSA));
+        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256", RSA));       // 无空格
+        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256 ", RSA));      // 空 hex
+        assertThrows(WopError.class, () -> ContentDigest.parse(" sha-256 ab", RSA));   // 前导空格
+        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256\t4cf7", RSA)); // 制表符
     }
 
     @Test
     void crossFamilyLabelRejected() {
         // I5：sm3 标签配 RSA 套件 / sha-256 配 SM2 套件
-        assertThrows(WopSdkException.class, () -> ContentDigest.parse(
+        assertThrows(WopError.class, () -> ContentDigest.parse(
                 "sm3 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf", RSA));
-        assertThrows(WopSdkException.class, () -> ContentDigest.parse(
+        assertThrows(WopError.class, () -> ContentDigest.parse(
                 "sha-256 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf", SM2));
     }
 }

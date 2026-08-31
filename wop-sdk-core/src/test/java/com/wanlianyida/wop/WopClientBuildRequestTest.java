@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * WopClient.buildRequest 出向：L0/L2 信封、I1 digest 入签、D2 缺席语义、
  * F9 nonce/timestamp、确定性（注入 clock/nonce 后字节可重放）。
+ * §2.2：配置类失败（Builder/buildRequest）归类 configuration（肯定式断言 category）。
  */
 class WopClientBuildRequestTest {
 
@@ -52,20 +53,20 @@ class WopClientBuildRequestTest {
 
     @Test
     void builderRequiresMandatoryFields() {
-        // appKey / suite / 双钥缺一不可，fail-fast 于 build()
-        assertThrows(WopSdkException.class, () -> WopClient.builder().build());
-        assertThrows(WopSdkException.class, () -> WopClient.builder().appKey("a").build());
-        assertThrows(WopSdkException.class, () -> WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256").build());
+        // appKey / suite / 双钥缺一不可，fail-fast 于 build()（category=configuration）
+        assertThrows(WopError.class, () -> WopClient.builder().build());
+        assertThrows(WopError.class, () -> WopClient.builder().appKey("a").build());
+        assertThrows(WopError.class, () -> WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256").build());
         WopClient.Builder partial = WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(RSA_PRIV);
-        assertThrows(WopSdkException.class, partial::build);
+        assertThrows(WopError.class, partial::build);
         // 非法套件
-        assertThrows(WopSdkException.class, () -> WopClient.builder().appKey("a")
+        assertThrows(WopError.class, () -> WopClient.builder().appKey("a")
                 .suite("WOP-RSA3072-SM3").merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB).build());
         // 密钥与套件长度不符
-        assertThrows(WopSdkException.class, () -> WopClient.builder().appKey("a")
+        assertThrows(WopError.class, () -> WopClient.builder().appKey("a")
                 .suite("WOP-RSA4096-SHA256").merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB).build());
-        assertThrows(WopSdkException.class, () -> WopClient.builder().appKey("a")
+        assertThrows(WopError.class, () -> WopClient.builder().appKey("a")
                 .suite("WOP-RSA3072-SHA256").merchantPrivateKey("!!!").platformPublicKey(RSA_PUB).build());
     }
 
@@ -224,12 +225,13 @@ class WopClientBuildRequestTest {
     void rejectsInvalidBuildRequestArguments() {
         WopClient client = fixedClient(NONCE);
         byte[] body = Codec.utf8("{}");
-        assertThrows(WopSdkException.class, () -> client.buildRequest(" ", "/p", body, SecurityLevel.L0));
-        assertThrows(WopSdkException.class, () -> client.buildRequest("POST", " ", body, SecurityLevel.L0));
-        assertThrows(WopSdkException.class, () -> client.buildRequest("POST", "/p", body, null));
+        WopError e1 = assertThrows(WopError.class, () -> client.buildRequest(" ", "/p", body, SecurityLevel.L0));
+        assertEquals(WopError.Category.configuration, e1.category());   // spec:2.2
+        assertThrows(WopError.class, () -> client.buildRequest("POST", " ", body, SecurityLevel.L0));
+        assertThrows(WopError.class, () -> client.buildRequest("POST", "/p", body, null));
         // L2 需要非空 body
-        assertThrows(WopSdkException.class, () -> client.buildRequest("POST", "/p", null, SecurityLevel.L2));
-        assertThrows(WopSdkException.class, () -> client.buildRequest("POST", "/p", new byte[0], SecurityLevel.L2));
+        assertThrows(WopError.class, () -> client.buildRequest("POST", "/p", null, SecurityLevel.L2));
+        assertThrows(WopError.class, () -> client.buildRequest("POST", "/p", new byte[0], SecurityLevel.L2));
     }
 
     @Test
@@ -247,7 +249,8 @@ class WopClientBuildRequestTest {
                 () -> draft.headers().put("x-evil", "1"));
     }
 
-    /** 网关侧等价验证：按 signedHeaders 从 draft.headers 重建 canonical 并用商户公钥验签。 */
+    /** 网关侧等价验证：按 signedHeaders 从 draft.headers 重建 canonical 并用商户公钥验签。
+     *  D14：验签 userId = 请求身份 appKey（出向签名 userId 同源）。 */
     static boolean signatureVerifies(RequestDraft draft, SignHeader.Parsed sign, String publicKeyB64) {
         return signatureVerifies(draft, sign, com.wanlianyida.wop.crypto.KeyCodec.parsePublicKey(
                 publicKeyB64, AlgorithmSuite.parse(sign.securityReq())));
@@ -264,7 +267,9 @@ class WopClientBuildRequestTest {
                 sign.protocolVersion() + "/" + sign.expiredSeconds(),
                 draft.method(), draft.path(), "", CanonicalRequest.canonicalHeaders(signed));
         AlgorithmSuite suite = AlgorithmSuite.parse(sign.securityReq());
+        // spec:D14：userId = x-wop-appkey（与出向签名同源）
         return suite.signature().verify(Codec.utf8(canonical),
-                Codec.b64UrlDecode(sign.signature()), publicKey);
+                Codec.b64UrlDecode(sign.signature()), publicKey,
+                Codec.utf8(draft.headers().get("x-wop-appkey")));
     }
 }
