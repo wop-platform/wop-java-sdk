@@ -55,7 +55,10 @@ jobs:
       - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          # keyid 为派生值（非 secret 子串，不会被掩码），把签名钥匙身份锚定进日志
+          gpg --list-secret-keys --keyid-format long
 
       - name: Write Maven settings.xml（凭证仅经 Secrets 注入环境变量）
         env:

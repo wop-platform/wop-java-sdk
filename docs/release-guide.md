@@ -42,6 +42,11 @@ gpg --gen-key                                    # 选 ECC 或 RSA ≥3072，设
 gpg --armor --export <key-id>                    # 公钥 → 粘贴到 Portal → Keys 页上传
 gpg --armor --export-secret-keys <key-id>        # ASCII 私钥全文 → Secret GPG_PRIVATE_KEY
 # 口令 → Secret GPG_PASSPHRASE
+
+# 公钥还必须上传公共 keyserver——Portal 签名校验按指纹查 keyserver，Keys 页 ≠ keyserver（v0.1.0 三次失败根因）：
+gpg --keyserver hkps://keyserver.ubuntu.com --send-keys <key-id>   # hkp:// 11371 常被网络挡，必须 hkps 443
+# 打 tag 前预检：HTTP 200 才继续；Portal 对 keyserver 查询有分钟级缓存，刚上传需等缓存过期再发
+curl -s -o /dev/null -w '%{http_code}\n' "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<完整指纹>"
 ```
 
 Secrets 配置入口：GitHub 仓库 → Settings → Secrets and variables → Actions →
