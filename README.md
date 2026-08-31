@@ -17,6 +17,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 | `wop-sdk-core` | 协议核心：套件解析、canonicalRequest、`x-wop-sign` 加验签、`x-wop-content-digest`、L2 数字信封、F6 校验顺序、I7 错误模糊化；含 `Transport` 抽象 |
 | `wop-sdk-okhttp` | OkHttp 适配器（okhttp 依赖 `provided`，商户自带版本） |
 | `wop-sdk-jdkhttp` | `java.net.http` 适配器（零额外依赖） |
+| `wop-sdk-unirest` | Kong Unirest 4.x 适配器（unirest-java-core 依赖 `provided`，商户自带版本） |
 
 支持套件：`WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。
 
@@ -29,7 +30,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
   <version>0.1.0</version>
 </dependency>
 
-<!-- 可选适配器（二选一）：okhttp 依赖 scope=provided（商户自带版本） / jdkhttp 零额外依赖 -->
+<!-- 可选适配器（三选一）：okhttp / unirest 的客户端依赖 scope=provided（商户自带版本，unirest 即 com.konghq:unirest-java-core） / jdkhttp 零额外依赖。unirest 适配器默认自建 UnirestInstance，长期运行建议经构造器注入复用单例并统一关闭 -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
@@ -39,6 +40,12 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-jdkhttp</artifactId>
+  <version>0.1.0</version>
+</dependency>
+<!-- 或 -->
+<dependency>
+  <groupId>com.wanlianyida</groupId>
+  <artifactId>wop-sdk-unirest</artifactId>
   <version>0.1.0</version>
 </dependency>
 ```

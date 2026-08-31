@@ -17,6 +17,7 @@
     <module>wop-sdk-core</module>
     <module>wop-sdk-okhttp</module>
     <module>wop-sdk-jdkhttp</module>
+    <module>wop-sdk-unirest</module>
   </modules>
 
   <properties>
@@ -26,6 +27,7 @@
     <bc.version>1.84</bc.version>
     <junit.version>5.12.2</junit.version>
     <okhttp.version>4.12.0</okhttp.version>
+    <unirest.version>4.10.1</unirest.version>
     <jacoco.version>0.8.13</jacoco.version>
   </properties>
 
@@ -47,6 +49,13 @@
         <groupId>com.squareup.okhttp3</groupId>
         <artifactId>okhttp-bom</artifactId>
         <version>${okhttp.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.konghq</groupId>
+        <artifactId>unirest-java-bom</artifactId>
+        <version>${unirest.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
