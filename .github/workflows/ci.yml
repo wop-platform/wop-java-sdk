@@ -56,3 +56,14 @@ jobs:
           name: pit-reports
           path: 'wop-sdk-core/target/pit-reports/'
           if-no-files-found: warn
+
+  # 变异点快照漂移检测（wop-specs D7：PR 级秒级防线；完整变异跑见 mutation job
+  # 定期档 / scripts/mutation-check.py 手动档）。
+  equivalent-anchors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 scripts/check-equivalent-anchors.py
