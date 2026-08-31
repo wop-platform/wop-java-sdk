@@ -493,7 +493,12 @@ class TestCodeupEndpointFallback:
         with pytest.raises(hosting.HostingError) as e:
             ad._req("GET", "/oapi/v1/codeup/organizations/org/repositories/42")
         # 两次都失败才报错；且报错信息指向重试后的端点
-        assert "openapi-rdc.aliyuncs.com" in str(e.value)
+        import re
+        import urllib.parse as up
+        msg = str(e.value)
+        urls = re.findall(r"https?://[^\s'\"<>]+", msg)
+        hosts = [up.urlparse(u).hostname for u in urls]
+        assert "openapi-rdc.aliyuncs.com" in hosts
 
 
 class TestCli:
