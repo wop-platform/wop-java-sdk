@@ -16,7 +16,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 |------|------|
 | `wop-sdk-core` | 协议核心：套件解析、canonicalRequest、`x-wop-sign` 加验签、`x-wop-content-digest`、L2 数字信封、F6 校验顺序、I7 错误模糊化；含 `Transport` 抽象 |
 | `wop-sdk-okhttp` | OkHttp 适配器（okhttp 依赖 `provided`，商户自带版本） |
-| `wop-sdk-jdkhttp` | `java.net.http` 适配器（零额外依赖） |
+| `wop-sdk-jdkhttp` | `HttpURLConnection` 适配器（零额外依赖、Java 8 floor；仅标准方法集，PATCH 等扩展方法见模块 javadoc） |
 | `wop-sdk-unirest` | Kong Unirest 4.x 适配器（unirest-java-core 依赖 `provided`，商户自带版本；运行时要求 Java 11+，上游 4.x 字节码 major 55） |
 
 支持套件：`WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。

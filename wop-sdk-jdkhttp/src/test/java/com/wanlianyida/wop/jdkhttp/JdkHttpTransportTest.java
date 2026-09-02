@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * JDK HttpClient 适配器：com.sun.net.httpserver 覆盖请求/响应映射与错误传播。
+ * JDK HttpURLConnection 适配器：com.sun.net.httpserver 覆盖请求/响应映射与错误传播。
  */
 class JdkHttpTransportTest {
 
@@ -124,6 +124,18 @@ class JdkHttpTransportTest {
     }
 
     @Test
+    void patchMethodRejectedBeforeConnect() {
+        // HttpURLConnection 仅接受标准方法：PATCH 等扩展方法开连接前显式拒绝（fail fast，
+        // 不触网——baseUrl 指向必然拒收的端口，消息断言可区分"方法拒绝"与"连接失败"）。
+        // 原 java.net.http 版可用 PATCH，此差异已在类 javadoc 声明；需 PATCH 请改用
+        // okhttp/unirest 适配器。
+        JdkHttpTransport transport = new JdkHttpTransport("http://127.0.0.1:1");
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("PATCH", "/p", headers(), new byte[]{1})));
+        assertTrue(ex.getMessage().contains("PATCH"));
+    }
+
+    @Test
     void connectionFailureWrappedAsSdkException() {
         // 无监听端口（保留 127.0.0.1 上一个几乎必然未占用的端口段）
         JdkHttpTransport transport = new JdkHttpTransport("http://127.0.0.1:1");
@@ -151,7 +163,7 @@ class JdkHttpTransportTest {
         TransportResponse response = trailing.send(
                 new RequestDraft("HEAD", "gateway/x", headers("x-wop-appkey", "a"), null));
         assertEquals(200, response.statusCode());
-        assertEquals("GET", seenMethod.get());   // JDK HttpClient 将无 body 的 HEAD 归一为 GET
+        assertEquals("GET", seenMethod.get());   // HEAD 归一为 GET（保留原 java.net.http 版归一语义）
 
         JdkHttpTransport blank = new JdkHttpTransport("   ");
         assertThrows(WopSdkException.class, () -> blank.send(

@@ -18,7 +18,7 @@ wire byte formats.
 |--------|-------------|
 | `wop-sdk-core` | Protocol core: suite parsing, canonicalRequest, `x-wop-sign` sign/verify, `x-wop-content-digest`, L2 digital envelope, F6 verification order, I7 error obfuscation; hosts the `Transport` abstraction |
 | `wop-sdk-okhttp` | OkHttp adapter (okhttp dependency is `provided`; bring your own version) |
-| `wop-sdk-jdkhttp` | `java.net.http` adapter (zero extra dependencies) |
+| `wop-sdk-jdkhttp` | `HttpURLConnection` adapter (zero extra dependencies, Java 8 floor; standard methods only — PATCH and other extension methods are rejected, see module javadoc) |
 | `wop-sdk-unirest` | Kong Unirest 4.x adapter (unirest-java-core dependency is `provided`; bring your own version) |
 
 Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
