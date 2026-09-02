@@ -3,6 +3,8 @@ import com.wanlianyida.wop.WopError;
 import org.junit.jupiter.api.Test;
 
 
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Base64;
@@ -25,7 +27,7 @@ class KeyCodecTest {
 
     @Test
     void parsesRsaSpkiPublicBase64() {
-        var key = assertInstanceOf(RSAPublicKey.class,
+        RSAPublicKey key = assertInstanceOf(RSAPublicKey.class,
                 KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072));
         assertEquals(3072, key.getModulus().bitLength());
     }
@@ -48,9 +50,9 @@ class KeyCodecTest {
     @Test
     void parsesSm2RawPointPublicAndScalarPrivate() {
         // D12：公钥 04||X||Y 65B、私钥 d 32B（Base64）
-        var pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
+        PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
         assertNotNull(pub);
-        var priv = KeyCodec.parsePrivateKey(TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
+        PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
         assertNotNull(priv);
         // 缓存命中返回同一实例（D7）
         assertTrue(pub == KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2));
@@ -60,12 +62,12 @@ class KeyCodecTest {
     void parsesSm2SpkiPublicAndPkcs8Private() {
         // 由 04||X||Y 构造 SPKI、由 d 构造 PKCS#8 后回喂（形态互认）
         byte[] point = Base64.getDecoder().decode(TestVectors.keys("sm2").path("publicPointB64").asText());
-        var spkiPub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
+        PublicKey spkiPub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
         // SPKI 形态：经策略转换守卫后再喂公钥编码
         String spkiB64 = Base64.getEncoder().encodeToString(spkiPub.getEncoded());
         assertNotNull(KeyCodec.parsePublicKey(spkiB64, SM2));
 
-        var priv = KeyCodec.parsePrivateKey(TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
+        PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
         String pkcs8B64 = Base64.getEncoder().encodeToString(priv.getEncoded());
         assertNotNull(KeyCodec.parsePrivateKey(pkcs8B64, SM2));
         assertEquals(point.length, 65);
@@ -124,6 +126,6 @@ class KeyCodecTest {
         for (int i = 0; i < base64.length(); i += 64) {
             sb.append(base64, i, Math.min(base64.length(), i + 64)).append('\n');
         }
-        return sb.toString().stripTrailing();
+        return sb.toString().replaceAll("\\s+$", "");
     }
 }

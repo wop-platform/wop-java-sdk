@@ -134,7 +134,7 @@ class CoverageEdge3Test {
     void buildRequestEmptyByteArrayBodyIsNoBody() {
         WopClient client = testClient();
         // L0 + 空数组：hasBody=false → wireBody=null → digest 缺席（与 null body 同语义）
-        var draft = client.buildRequest("POST", "/gateway/test", new byte[0], SecurityLevel.L0);
+        RequestDraft draft = client.buildRequest("POST", "/gateway/test", new byte[0], SecurityLevel.L0);
         assertNull(draft.wireBody());
         assertNull(draft.headers().get("x-wop-content-digest"));
         // L2 + 空数组：拒绝（L2 需要非空 body）

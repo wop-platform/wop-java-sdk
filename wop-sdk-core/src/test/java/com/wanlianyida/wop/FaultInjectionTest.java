@@ -151,7 +151,7 @@ class FaultInjectionTest {
             headers.put("x-wop-encrypt", EncryptHeader.buildL2(Codec.b64UrlEncode(
                     RSA.keyEncrypt().encrypt(Codec.utf8(payload), merchantPub))));
             headers.put("x-wop-content-digest", ContentDigest.build(RSA, wire));
-            List<String> signed = new ArrayList<>(List.of("x-wop-content-digest", "x-wop-encrypt",
+            List<String> signed = new ArrayList<>(Arrays.asList("x-wop-content-digest", "x-wop-encrypt",
                     "x-wop-nonce", "x-wop-timestamp"));
             Map<String, String> sub = new TreeMap<>();
             signed.forEach(n -> sub.put(n, headers.get(n)));

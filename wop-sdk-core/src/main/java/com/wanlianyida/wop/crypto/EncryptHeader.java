@@ -2,6 +2,8 @@ package com.wanlianyida.wop.crypto;
 
 import com.wanlianyida.wop.WopError;
 
+import java.util.Objects;
+
 /**
  * x-wop-encrypt 加密指令头编解码。
  * <p>
@@ -11,12 +13,55 @@ import com.wanlianyida.wop.WopError;
  */
 public final class EncryptHeader {
 
-    /** 解析结果；level=L0 时 dek 为 null。 */
-    public record Parsed(String level, String dek) {
+    /** 解析结果；level=L0 时 dek 为 null（record 等价值语义：equals/hashCode 按全部字段）。 */
+    public static final class Parsed {
+
+        /** 加密级别（L0/L2）。 */
+        private final String level;
+
+        /** DEK 载荷 base64url；L0 时为 null。 */
+        private final String dek;
+
+        public Parsed(String level, String dek) {
+            this.level = level;
+            this.dek = dek;
+        }
+
+        /** 加密级别（L0/L2）。 */
+        public String level() {
+            return level;
+        }
+
+        /** DEK 载荷 base64url；L0 时为 null。 */
+        public String dek() {
+            return dek;
+        }
 
         /** 是否 L2 全文加密。 */
         public boolean isEncrypted() {
             return "L2".equals(level);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof Parsed)) {
+                return false;
+            }
+            Parsed that = (Parsed) o;
+            return Objects.equals(level, that.level) && Objects.equals(dek, that.dek);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(level, dek);
+        }
+
+        @Override
+        public String toString() {
+            return "Parsed[level=" + level + ", dek=" + dek + "]";
         }
     }
 

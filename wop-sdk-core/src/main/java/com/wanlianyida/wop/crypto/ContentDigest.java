@@ -2,6 +2,8 @@ package com.wanlianyida.wop.crypto;
 
 import com.wanlianyida.wop.WopError;
 
+import java.util.Objects;
+
 /**
  * F4 x-wop-content-digest（D2 全语义）：
  * <ul>
@@ -13,8 +15,51 @@ import com.wanlianyida.wop.WopError;
  */
 public final class ContentDigest {
 
-    /** 解析结果：标签 + 64 位小写 hex。 */
-    public record Parsed(String label, String hex) {
+    /** 解析结果：标签 + 64 位小写 hex（record 等价值语义：equals/hashCode 按全部字段）。 */
+    public static final class Parsed {
+
+        /** 算法标签（如 SHA-256/sm3-256）。 */
+        private final String label;
+
+        /** 64 位小写 hex。 */
+        private final String hex;
+
+        public Parsed(String label, String hex) {
+            this.label = label;
+            this.hex = hex;
+        }
+
+        /** 算法标签（如 SHA-256/sm3-256）。 */
+        public String label() {
+            return label;
+        }
+
+        /** 64 位小写 hex。 */
+        public String hex() {
+            return hex;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof Parsed)) {
+                return false;
+            }
+            Parsed that = (Parsed) o;
+            return Objects.equals(label, that.label) && Objects.equals(hex, that.hex);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(label, hex);
+        }
+
+        @Override
+        public String toString() {
+            return "Parsed[label=" + label + ", hex=" + hex + "]";
+        }
     }
 
     /** 工具类禁实例化。 */

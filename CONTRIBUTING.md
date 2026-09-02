@@ -8,17 +8,17 @@
 [wop-sdk-spec v1.0-ratified](https://github.com/wop-platform/gtsp-wop-gateway/blob/main/docs/wop-sdk-spec.md)。
 协议正确性以网关真源导出的黄金向量为唯一锚（见 §4），任何实现改动不允许偏离向量。
 
-Maven 多模块布局（`groupId: com.wanlianyida`，JDK 17+）：
+Maven 多模块布局（`groupId: com.wanlianyida`，JDK 8+）：
 
 | 模块 | 职责 |
 |------|------|
 | `wop-sdk-core` | 协议核心：套件解析、canonicalRequest、`x-wop-sign`、`x-wop-content-digest`、L2 数字信封、F6 校验顺序、I7 错误模糊化 |
 | `wop-sdk-okhttp` | OkHttp Transport 适配器（okhttp 为 `provided`，商户自带版本） |
-| `wop-sdk-jdkhttp` | `java.net.http` Transport 适配器（零额外依赖） |
+| `wop-sdk-jdkhttp` | `HttpURLConnection` Transport 适配器（零额外依赖、Java 8 floor；仅标准方法集，PATCH 等扩展方法见模块 javadoc） |
 
 ## 2. 开发环境
 
-- JDK 17+（CI 使用 Temurin 17，见 `.github/workflows/ci.yml`）
+- JDK 8+（CI 矩阵 8/21/25——8 档 Zulu、21/25 档 Temurin（macOS aarch64 无 Temurin 8），见 `.github/workflows/ci.yml`；JaCoCo 覆盖率门禁只在 21 档执行；JDK 8 全仓构建需加 `-pl '!wop-sdk-unirest'`——unirest-java-core 4.x 为 Java 11+ 字节码，JDK 8 javac 读不了）
 - Maven 3.9+（多模块构建；建议沿用 CI 的 `-B -ntp` 非交互模式）
 - 无需本地服务：测试自带向量 conformance 套件（Cucumber）与 MockWebServer（okhttp 模块）
 
@@ -53,7 +53,16 @@ mvn -pl wop-sdk-core org.pitest:pitest-maven:mutationCoverage
 
 ## 5. 编码规范
 
-- Java 17 惯例：不可变对象优先、builder 构造、资源用 try-with-resources；公共 API 以现有 `WopClient` 风格为准，不引入第二套惯例
+- Java 8 惯例：不可变对象优先、构造器/builder 构造、资源用 try-with-resources；公共 API 以现有 `WopClient` 风格为准，不引入第二套惯例
+- **Java 8 语言级禁用清单**（`maven.compiler.release=8` 门禁强制，出现即编译失败）：
+  - `record` 声明（值对象用 final class + 全字段 equals/hashCode/toString，数组字段按引用比较以保持 record 等价语义）
+  - switch 表达式（`->` 分支 / `yield`）与 switch 模式匹配
+  - `var` 局部变量推断、`instanceof` 模式匹配
+  - `Map.of` / `List.of` / `Set.of` / `List.copyOf`（用 `Collections.singletonMap` / `Arrays.asList` / `new LinkedHashMap<>()`）
+  - `String.repeat` / `String.strip*` / `StringBuilder.isEmpty`（JDK 11+）、`InputStream.readAllBytes`（JDK 9+）、`BigInteger.TWO`（JDK 9+）
+  - `URLEncoder.encode(String, Charset)` 重载（JDK 10+）——统一走 `CanonicalRequest.urlencode(String, String charsetName)` seam
+  - `java.net.http` 模块（JDK 11+）——HTTP 传输用 `HttpURLConnection`（见 `wop-sdk-jdkhttp`）或 OkHttp/Unirest 适配器
+- 模块运行时要求：`wop-sdk-unirest` 依赖 unirest-java-core 4.x（上游字节码 major 55），运行时要求 Java 11+；其 pom profile 在 JDK<11 自动跳过测试，JDK 8 用户请改用 okhttp/jdkhttp 适配器
 - 错误契约保持现状：
   - 出向（`buildRequest`）：配置/协议格式错误抛 `WopSdkException`（本地明确、鉴权前可判定）
   - 入向（`verifyResponse`/`verifyCallback`）：统一返回 `VerifyResult`、永不抛异常；签名/解密失败对外模糊（I7，防 oracle）

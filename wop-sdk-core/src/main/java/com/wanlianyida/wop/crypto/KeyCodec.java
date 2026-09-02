@@ -133,7 +133,7 @@ public final class KeyCodec {
 
     /** 入参非空守卫（空值抛配置类明确异常）。 */
     private static void requireText(String text, String kind) {
-        if (text == null || text.isBlank()) {
+        if (text == null || text.trim().isEmpty()) {
             throw WopError.configuration(kind + "为空");
         }
     }

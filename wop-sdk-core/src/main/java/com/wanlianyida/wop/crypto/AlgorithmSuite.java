@@ -13,6 +13,10 @@ import com.wanlianyida.wop.crypto.strategies.Sm2SignatureStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sm3DigestStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sm4GcmStrategy;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,22 +33,30 @@ import java.util.Set;
 public final class AlgorithmSuite {
 
     /** 唯一注册表：合法 securityReq → 套件（D13）。 */
-    private static final Map<String, AlgorithmSuite> REGISTRY = Map.of(
-            "WOP-RSA3072-SHA256", new AlgorithmSuite("WOP-RSA3072-SHA256", "RSA", 3072, "SHA256",
-                    "sha-256", "AES-256-GCM",
-                    RsaPkcs1SignatureStrategy.INSTANCE, RsaOaepKeyEncryptStrategy.INSTANCE,
-                    Aes256GcmStrategy.INSTANCE, Sha256DigestStrategy.INSTANCE),
-            "WOP-RSA4096-SHA256", new AlgorithmSuite("WOP-RSA4096-SHA256", "RSA", 4096, "SHA256",
-                    "sha-256", "AES-256-GCM",
-                    RsaPkcs1SignatureStrategy.INSTANCE, RsaOaepKeyEncryptStrategy.INSTANCE,
-                    Aes256GcmStrategy.INSTANCE, Sha256DigestStrategy.INSTANCE),
-            "WOP-SM2-SM3", new AlgorithmSuite("WOP-SM2-SM3", "SM2", 0, "SM3",
-                    "sm3", "SM4-GCM",
-                    Sm2SignatureStrategy.INSTANCE, Sm2KeyEncryptStrategy.INSTANCE,
-                    Sm4GcmStrategy.INSTANCE, Sm3DigestStrategy.INSTANCE));
+    private static final Map<String, AlgorithmSuite> REGISTRY = buildRegistry();
 
-    private static final Set<String> KNOWN_KEY_ALGORITHMS = Set.of("RSA3072", "RSA4096", "SM2");
-    private static final Set<String> KNOWN_DIGEST_ALGORITHMS = Set.of("SHA256", "SM3");
+    private static final Set<String> KNOWN_KEY_ALGORITHMS =
+            Collections.unmodifiableSet(new HashSet<>(Arrays.asList("RSA3072", "RSA4096", "SM2")));
+    private static final Set<String> KNOWN_DIGEST_ALGORITHMS =
+            Collections.unmodifiableSet(new HashSet<>(Arrays.asList("SHA256", "SM3")));
+
+    /** Java 8 兼容注册表装配（保持 Map.of 插入序与不可变语义）。 */
+    private static Map<String, AlgorithmSuite> buildRegistry() {
+        Map<String, AlgorithmSuite> registry = new LinkedHashMap<>();
+        registry.put("WOP-RSA3072-SHA256", new AlgorithmSuite("WOP-RSA3072-SHA256", "RSA", 3072, "SHA256",
+                "sha-256", "AES-256-GCM",
+                RsaPkcs1SignatureStrategy.INSTANCE, RsaOaepKeyEncryptStrategy.INSTANCE,
+                Aes256GcmStrategy.INSTANCE, Sha256DigestStrategy.INSTANCE));
+        registry.put("WOP-RSA4096-SHA256", new AlgorithmSuite("WOP-RSA4096-SHA256", "RSA", 4096, "SHA256",
+                "sha-256", "AES-256-GCM",
+                RsaPkcs1SignatureStrategy.INSTANCE, RsaOaepKeyEncryptStrategy.INSTANCE,
+                Aes256GcmStrategy.INSTANCE, Sha256DigestStrategy.INSTANCE));
+        registry.put("WOP-SM2-SM3", new AlgorithmSuite("WOP-SM2-SM3", "SM2", 0, "SM3",
+                "sm3", "SM4-GCM",
+                Sm2SignatureStrategy.INSTANCE, Sm2KeyEncryptStrategy.INSTANCE,
+                Sm4GcmStrategy.INSTANCE, Sm3DigestStrategy.INSTANCE));
+        return Collections.unmodifiableMap(registry);
+    }
 
     private final String securityReq;
     private final String keyAlgorithm;
@@ -76,7 +88,7 @@ public final class AlgorithmSuite {
 
     /** 解析 securityReq：先纯格式校验，再查注册表（合法组合的原子装配）。 */
     public static AlgorithmSuite parse(String securityReq) {
-        if (securityReq == null || securityReq.isBlank()) {
+        if (securityReq == null || securityReq.trim().isEmpty()) {
             throw new WopSuiteException(WopSuiteException.Kind.PARSE, "securityReq 为空（期望 WOP-<密钥算法>-<摘要算法>）");
         }
         String[] segments = securityReq.trim().split("-");

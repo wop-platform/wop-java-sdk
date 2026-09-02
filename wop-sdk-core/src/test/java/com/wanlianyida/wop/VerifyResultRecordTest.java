@@ -4,6 +4,7 @@ import com.wanlianyida.wop.crypto.Codec;
 import com.wanlianyida.wop.crypto.TestVectors;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -52,7 +53,7 @@ class VerifyResultRecordTest {
         assertNull(VerifyResult.ok(new byte[0]).reason());
         // Reason 全枚举 message 非空（对外语义冻结）
         for (VerifyResult.Reason reason : VerifyResult.Reason.values()) {
-            assertFalse(reason.message().isBlank());
+            assertFalse(reason.message().trim().isEmpty());
         }
     }
 
@@ -94,14 +95,21 @@ class VerifyResultRecordTest {
         assertNull(draft.wireBody());
         // 空白签头响应拒绝
         assertEquals(VerifyResult.Reason.MISSING_SIGN_HEADER,
-                client.verifyResponse(Map.of("x-wop-sign", "  "), Codec.utf8("{}"), "/p").reason());
+                client.verifyResponse(Collections.singletonMap("x-wop-sign", "  "), Codec.utf8("{}"), "/p").reason());
         // 空 digest 头值（有 body）
         assertEquals(VerifyResult.Reason.MISSING_DIGEST_HEADER,
-                client.verifyResponse(Map.of("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/a/b",
+                client.verifyResponse(headerMap("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/a/b",
                         "x-wop-content-digest", " "), Codec.utf8("x"), "/p").reason());
         // L2 但 digest 头为空白串
         assertEquals(VerifyResult.Reason.MISSING_DIGEST_HEADER,
-                client.verifyResponse(Map.of("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/a/b",
+                client.verifyResponse(headerMap("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/a/b",
                         "x-wop-content-digest", ""), Codec.utf8("x"), "/p").reason());
+    }
+
+    private static Map<String, String> headerMap(String k1, String v1, String k2, String v2) {
+        Map<String, String> map = new java.util.LinkedHashMap<String, String>();
+        map.put(k1, v1);
+        map.put(k2, v2);
+        return map;
     }
 }
