@@ -92,6 +92,8 @@
             </dependency>
           </oldClassPathDependencies>
           <parameter>
+            <!-- 门禁契约仅覆盖公共 API；japicmp 默认 protected 会把 protected 成员变更也纳入 break，故显式收紧为 public -->
+            <accessModifier>public</accessModifier>
             <!-- 任何公共 API 变化（含新增）都必须显式更新快照，防无意识漂移 -->
             <breakBuildOnModifications>true</breakBuildOnModifications>
             <!-- 兜底显式化：删除/签名变更同时构成二进制与源码不兼容 -->
