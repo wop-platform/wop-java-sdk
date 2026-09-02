@@ -1,6 +1,7 @@
 target/
 *.class
 *.jar
+!wop-sdk-core/api-baseline/*.jar
 .idea/
 *.iml
 .vscode/

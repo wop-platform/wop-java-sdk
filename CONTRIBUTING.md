@@ -41,6 +41,23 @@ mvn -B -ntp verify
 mvn -pl wop-sdk-core org.pitest:pitest-maven:mutationCoverage
 ```
 
+### API 兼容性门禁（japicmp 快照基线）
+
+`wop-sdk-core` 的公共 API 面（对商户暴露的协议核心）受 japicmp 门禁保护：`verify` 阶段将当前构建产物与入库快照 **`wop-sdk-core/api-baseline/wop-sdk-core-api-baseline.jar`** 比对，任何公共 API 变化（新增、删除、签名/修饰符变更）都会 **BUILD FAILURE**，除非快照在同一 PR 中被显式更新。CI 仅 21 档执行 `mvn verify`，故门禁在 21 档生效（与 JaCoCo 覆盖率门禁同档）。
+
+- **为什么是入库快照而不是已发布 GA 坐标**：japicmp 的 `oldVersion` 走 Maven 坐标解析时，若仓库当前版本与 GA 同号（本仓 main 长期保持 `0.1.0`，与 Central 已发布 GA 同号），插件会拿到 reactor 里的当前 jar 做**自比对**，门禁空转。入库快照等价于 api-extractor 的 `.api` 快照文件（wop-typescript-sdk 先例）：种子 = 引入门禁时的 main API 终态，之后一切变化必须显式刷新。
+- **有意变更公共 API（含向后兼容的新增）**：在实现代码的同一 PR 中执行
+
+  ```bash
+  mvn -B -ntp -pl wop-sdk-core clean package -DskipTests -Djacoco.skip=true
+  cp wop-sdk-core/target/wop-sdk-core-*.jar wop-sdk-core/api-baseline/wop-sdk-core-api-baseline.jar
+  ```
+
+  并提交快照更新。reviewer 在 diff 中看到快照变更即知 API 面动了，需重点复核。
+- **破坏性变更**（删除/改名/签名变更，如 D14 删除 `Sm2Support.DEFAULT_USER_ID`）：除刷新快照外，PR 必须说明破坏依据与商户迁移路径；按语义化版本应伴随主/次版本号提升，在下一个发布版本中落地（见 §8 发布流程）。
+- **基线升级到 GA 对齐**：当仓库版本推进到与 GA 不同号（如 `0.2.0-SNAPSHOT` vs GA `0.1.0`）后，可将 `wop-sdk-core/pom.xml` 中 japicmp 的 `oldVersion` 从快照文件切回 Maven Central 的 GA 坐标（`<dependency>` 形式，版本即已发布 GA），以发布物为锚；切换属一次性基建变更，需在 PR 中说明。
+- 报告产物（本地排查用）：`wop-sdk-core/target/japicmp/api-compatibility-gate.{diff,md,html,xml}`。
+
 ## 4. 黄金向量纪律（协议正确性唯一锚）
 
 - `vectors/crypto-vectors.json` 是网关真源（`gtsp-wop-gateway` 仓库 `docs/crypto-vectors.json`）的**只读副本**，**禁止手改**

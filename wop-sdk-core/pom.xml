@@ -66,6 +66,49 @@
       </testResource>
     </testResources>
     <plugins>
+      <!-- ===== 公共 API 兼容性门禁（japicmp，绑定 verify；CI 仅 21 档跑 verify 故生效）===== -->
+      <!-- old = 入库快照 api-baseline/wop-sdk-core-api-baseline.jar（显式 API 基线，
+           等价于 api-extractor 的 .api 快照），new = 当前构建产物。
+           注意：不能用 GA 坐标做 old——本仓 main pom 版本长期与已发布 GA 同号
+           （如 0.1.0），同 GAV 时 japicmp 会拿到 reactor 里的当前 jar 做自比对，门禁空转。
+           任何公共 API 面变化（新增/删除/签名变更）都要求显式更新快照后才过 CI；
+           更新流程与破坏性变更流程见 CONTRIBUTING「API 兼容性门禁」。 -->
+      <plugin>
+        <groupId>com.github.siom79.japicmp</groupId>
+        <artifactId>japicmp-maven-plugin</artifactId>
+        <version>0.26.1</version>
+        <configuration>
+          <oldVersion>
+            <file>
+              <path>${project.basedir}/api-baseline/wop-sdk-core-api-baseline.jar</path>
+            </file>
+          </oldVersion>
+          <!-- 快照 jar 只含本模块类；其公共签名引用的 BC 类型需显式挂上老 classpath -->
+          <oldClassPathDependencies>
+            <dependency>
+              <groupId>org.bouncycastle</groupId>
+              <artifactId>bcprov-jdk18on</artifactId>
+              <version>${bc.version}</version>
+            </dependency>
+          </oldClassPathDependencies>
+          <parameter>
+            <!-- 任何公共 API 变化（含新增）都必须显式更新快照，防无意识漂移 -->
+            <breakBuildOnModifications>true</breakBuildOnModifications>
+            <!-- 兜底显式化：删除/签名变更同时构成二进制与源码不兼容 -->
+            <breakBuildOnBinaryIncompatibleModifications>true</breakBuildOnBinaryIncompatibleModifications>
+            <breakBuildOnSourceIncompatibleModifications>true</breakBuildOnSourceIncompatibleModifications>
+          </parameter>
+        </configuration>
+        <executions>
+          <execution>
+            <id>api-compatibility-gate</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>cmp</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <!-- 变异测试：PIT（mvn -pl wop-sdk-core org.pitest:pitest-maven:mutationCoverage） -->
       <plugin>
         <groupId>org.pitest</groupId>
