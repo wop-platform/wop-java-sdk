@@ -30,6 +30,15 @@ class JdkHttpTransportFaultInjectionTest {
         }
     }
 
+    /** Java 8 无 Map.of：成对参数构造小请求头。 */
+    private static Map<String, String> headers(String... kv) {
+        Map<String, String> map = new java.util.LinkedHashMap<String, String>();
+        for (int i = 0; i < kv.length; i += 2) {
+            map.put(kv[i], kv[i + 1]);
+        }
+        return map;
+    }
+
     @Test
     void connectionResetDuringBodyWrapped() throws Exception {
         // 故障：声明 Content-Length=1000 但只写 10 字节即关闭 → IOException 包装为明确异常
@@ -45,7 +54,7 @@ class JdkHttpTransportFaultInjectionTest {
         JdkHttpTransport transport = new JdkHttpTransport(
                 "http://127.0.0.1:" + server.getAddress().getPort());
         assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/cut", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/cut", headers(), new byte[]{1})));
     }
 
     @Test
@@ -63,7 +72,7 @@ class JdkHttpTransportFaultInjectionTest {
         JdkHttpTransport transport = new JdkHttpTransport(
                 "http://127.0.0.1:" + server.getAddress().getPort());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(502, response.statusCode());
         assertTrue(new String(response.body(), java.nio.charset.StandardCharsets.UTF_8)
                 .contains("OP_GW_5001"));
@@ -81,7 +90,7 @@ class JdkHttpTransportFaultInjectionTest {
         JdkHttpTransport transport = new JdkHttpTransport(
                 "http://127.0.0.1:" + server.getAddress().getPort());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("x-wop-sign"));
         // 大小写不敏感视图：任意形态查询命中同一值；存储键恒小写
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("X-WOP-SIGN"));
@@ -97,7 +106,7 @@ class JdkHttpTransportFaultInjectionTest {
         JdkHttpTransport transport = new JdkHttpTransport(
                 "http://127.0.0.1:" + server.getAddress().getPort());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(204, response.statusCode());
         assertEquals(0, response.body().length);
     }

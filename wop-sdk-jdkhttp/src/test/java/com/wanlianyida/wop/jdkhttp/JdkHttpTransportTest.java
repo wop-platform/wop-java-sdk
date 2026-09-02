@@ -7,6 +7,7 @@ import com.wanlianyida.wop.WopSdkException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -37,7 +38,7 @@ class JdkHttpTransportTest {
     private String start(String responseBody) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/gateway/x", exchange -> {
-            byte[] body = exchange.getRequestBody().readAllBytes();
+            byte[] body = readAll(exchange.getRequestBody());
             seenBody.set(body);
             seenMethod.set(exchange.getRequestMethod());
             seenHeader.set(exchange.getRequestHeaders().getFirst("x-wop-appkey"));
@@ -50,6 +51,26 @@ class JdkHttpTransportTest {
         });
         server.start();
         return "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    /** Java 8 无 InputStream.readAllBytes：手动循环读尽。 */
+    private static byte[] readAll(java.io.InputStream in) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[4096];
+        int read;
+        while ((read = in.read(chunk)) != -1) {
+            buffer.write(chunk, 0, read);
+        }
+        return buffer.toByteArray();
+    }
+
+    /** Java 8 无 Map.of：成对参数构造小请求头。 */
+    private static Map<String, String> headers(String... kv) {
+        Map<String, String> map = new LinkedHashMap<String, String>();
+        for (int i = 0; i < kv.length; i += 2) {
+            map.put(kv[i], kv[i + 1]);
+        }
+        return map;
     }
 
     private final AtomicReference<byte[]> seenBody = new AtomicReference<>();
@@ -79,7 +100,7 @@ class JdkHttpTransportTest {
         String base = start("");
         JdkHttpTransport transport = new JdkHttpTransport(base);
         TransportResponse response = transport.send(
-                new RequestDraft("GET", "/gateway/x", Map.of("x-wop-appkey", "a"), null));
+                new RequestDraft("GET", "/gateway/x", headers("x-wop-appkey", "a"), null));
         assertEquals(200, response.statusCode());
         assertEquals("GET", seenMethod.get());
         assertEquals(0, seenBody.get().length);
@@ -90,7 +111,7 @@ class JdkHttpTransportTest {
         String base = start("abs");
         JdkHttpTransport transport = new JdkHttpTransport("http://invalid.example");
         TransportResponse response = transport.send(
-                new RequestDraft("POST", base + "/gateway/x", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", base + "/gateway/x", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
     }
 
@@ -98,7 +119,7 @@ class JdkHttpTransportTest {
     void relativePathWithoutBaseUrlRejected() {
         JdkHttpTransport transport = new JdkHttpTransport();
         WopSdkException ex = assertThrows(WopSdkException.class,
-                () -> transport.send(new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                () -> transport.send(new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("baseUrl"));
     }
 
@@ -107,7 +128,7 @@ class JdkHttpTransportTest {
         // 无监听端口（保留 127.0.0.1 上一个几乎必然未占用的端口段）
         JdkHttpTransport transport = new JdkHttpTransport("http://127.0.0.1:1");
         assertThrows(WopSdkException.class,
-                () -> transport.send(new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                () -> transport.send(new RequestDraft("POST", "/p", headers(), new byte[]{1})));
     }
 
     @Test
@@ -117,7 +138,7 @@ class JdkHttpTransportTest {
         Thread.currentThread().interrupt();
         try {
             assertThrows(WopSdkException.class, () -> transport.send(
-                    new RequestDraft("POST", "/gateway/x", Map.of(), new byte[]{1})));
+                    new RequestDraft("POST", "/gateway/x", headers(), new byte[]{1})));
         } finally {
             Thread.interrupted();   // 消费 interrupt 标志，避免污染后续测试
         }
@@ -128,13 +149,13 @@ class JdkHttpTransportTest {
         String base = start("h");
         JdkHttpTransport trailing = new JdkHttpTransport(base + "/");
         TransportResponse response = trailing.send(
-                new RequestDraft("HEAD", "gateway/x", Map.of("x-wop-appkey", "a"), null));
+                new RequestDraft("HEAD", "gateway/x", headers("x-wop-appkey", "a"), null));
         assertEquals(200, response.statusCode());
         assertEquals("GET", seenMethod.get());   // JDK HttpClient 将无 body 的 HEAD 归一为 GET
 
         JdkHttpTransport blank = new JdkHttpTransport("   ");
         assertThrows(WopSdkException.class, () -> blank.send(
-                new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
     }
 
     // spec:max-response-bytes —— 11MB 上限边界：超 1 字节拒 / 恰好上限过（流式计数，读取过程中生效）
@@ -166,7 +187,7 @@ class JdkHttpTransportTest {
         String base = startFixedBody(JdkHttpTransport.MAX_RESPONSE_BYTES + 1);
         JdkHttpTransport transport = new JdkHttpTransport(base);
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/big", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/big", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("上限"));
     }
 
@@ -175,10 +196,21 @@ class JdkHttpTransportTest {
         String base = startFixedBody(JdkHttpTransport.MAX_RESPONSE_BYTES);
         JdkHttpTransport transport = new JdkHttpTransport(base);
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/big", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/big", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals(JdkHttpTransport.MAX_RESPONSE_BYTES, response.body().length);
         assertEquals((byte) 0x5A, response.body()[0]);
         assertEquals((byte) 0x5A, response.body()[JdkHttpTransport.MAX_RESPONSE_BYTES - 1]);
+    }
+
+    @Test
+    void postWithoutWireBodySendsEmptyBody() throws Exception {
+        // POST + wireBody=null（buildRequest 空数组 body 归一产物）→ 发送空体而非 NPE
+        String base = start("");
+        JdkHttpTransport transport = new JdkHttpTransport(base);
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/gateway/x", headers(), null));
+        assertEquals(200, response.statusCode());
+        assertEquals(0, seenBody.get().length);
     }
 }
