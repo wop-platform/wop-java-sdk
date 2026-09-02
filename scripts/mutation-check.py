@@ -110,7 +110,7 @@ def main():
         print(f"[{i:2d}] {cat:26s} {status:22s} {desc}")
         if note:
             print(f"      {note[:200]}")
-    killed = sum(1 for r in results if r[2] == "KILLED")
+    killed = sum(r[2] == "KILLED" for r in results)
     total = len(results)
     print(f"\n=== 变异击杀率: {killed}/{total} = {killed/total*100:.1f}% ===")
     surv = [r for r in results if r[2] != "KILLED"]

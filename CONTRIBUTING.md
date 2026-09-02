@@ -14,11 +14,11 @@ Maven 多模块布局（`groupId: com.wanlianyida`，JDK 8+）：
 |------|------|
 | `wop-sdk-core` | 协议核心：套件解析、canonicalRequest、`x-wop-sign`、`x-wop-content-digest`、L2 数字信封、F6 校验顺序、I7 错误模糊化 |
 | `wop-sdk-okhttp` | OkHttp Transport 适配器（okhttp 为 `provided`，商户自带版本） |
-| `wop-sdk-jdkhttp` | `java.net.http` Transport 适配器（零额外依赖） |
+| `wop-sdk-jdkhttp` | `HttpURLConnection` Transport 适配器（零额外依赖、Java 8 floor；仅标准方法集，PATCH 等扩展方法见模块 javadoc） |
 
 ## 2. 开发环境
 
-- JDK 8+（CI 矩阵 8/21/25——8 档 Zulu、21/25 档 Temurin（macOS aarch64 无 Temurin 8），见 `.github/workflows/ci.yml`；JaCoCo 覆盖率门禁只在 21 档执行）
+- JDK 8+（CI 矩阵 8/21/25——8 档 Zulu、21/25 档 Temurin（macOS aarch64 无 Temurin 8），见 `.github/workflows/ci.yml`；JaCoCo 覆盖率门禁只在 21 档执行；JDK 8 全仓构建需加 `-pl '!wop-sdk-unirest'`——unirest-java-core 4.x 为 Java 11+ 字节码，JDK 8 javac 读不了）
 - Maven 3.9+（多模块构建；建议沿用 CI 的 `-B -ntp` 非交互模式）
 - 无需本地服务：测试自带向量 conformance 套件（Cucumber）与 MockWebServer（okhttp 模块）
 
