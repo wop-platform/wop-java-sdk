@@ -21,7 +21,7 @@ final class Sm2DomainHolder {
 
     /** 域指纹（n|a|b|Gx|Gy 十六进制拼接，供曲线守卫整体比较）。 */
     private static String fingerprintOf() {
-        var g = X9.getG().normalize();
+        org.bouncycastle.math.ec.ECPoint g = X9.getG().normalize();
         return X9.getN().toString(16) + '|'
                 + X9.getCurve().getA().toBigInteger().toString(16) + '|'
                 + X9.getCurve().getB().toBigInteger().toString(16) + '|'

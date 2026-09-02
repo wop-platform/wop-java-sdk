@@ -10,8 +10,8 @@ public final class Sm2TestKeys {
     }
 
     public static BigInteger dOf(java.security.PrivateKey privateKey) {
-        if (privateKey instanceof ECPrivateKey ec) {
-            return ec.getD();
+        if (privateKey instanceof ECPrivateKey) {
+            return ((ECPrivateKey) privateKey).getD();
         }
         throw new IllegalArgumentException("非 BCEC 私钥");
     }

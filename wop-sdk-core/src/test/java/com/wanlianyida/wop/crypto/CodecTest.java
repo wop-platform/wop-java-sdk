@@ -1,6 +1,7 @@
 package com.wanlianyida.wop.crypto;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.wanlianyida.wop.TestText;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -75,22 +76,28 @@ class CodecTest {
             String value = rule.path("value").asText();
             String expect = rule.path("expect").asText();
             switch (id) {
-                case "b64url-with-padding", "b64url-illegal-char",
-                     "b64url-trailing-bits-noncanonical-2", "b64url-trailing-bits-noncanonical-3" -> {
+                case "b64url-with-padding":
+                case "b64url-illegal-char":
+                case "b64url-trailing-bits-noncanonical-2":
+                case "b64url-trailing-bits-noncanonical-3": {
                     assertEquals("reject", expect, id + " expect 哨兵");
                     IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                             () -> Codec.b64UrlDecode(value), id + " 须拒收");
                     assertTrue(ex.getMessage().contains("base64url"));
+                    break;
                 }
-                case "b64url-trailing-bits-canonical-2" -> {
+                case "b64url-trailing-bits-canonical-2": {
                     assertEquals("accept", expect, id + " expect 哨兵");
                     assertArrayEquals(new byte[]{0x00}, Codec.b64UrlDecode(value));        // "AA" → 1 字节 0x00
+                    break;
                 }
-                case "b64url-trailing-bits-canonical-3" -> {
+                case "b64url-trailing-bits-canonical-3": {
                     assertEquals("accept", expect, id + " expect 哨兵");
                     assertArrayEquals(new byte[]{0x4D, 0x61}, Codec.b64UrlDecode(value));  // "TWE" → "Ma"
+                    break;
                 }
-                default -> throw new IllegalStateException("未预期 b64url 向量 id: " + id);
+                default:
+                    throw new IllegalStateException("未预期 b64url 向量 id: " + id);
             }
         }
         assertEquals(6, consumed, "b64url-* 条数哨兵（真源 formatRules 12 条中 b64url 族 6 条）");
@@ -118,11 +125,11 @@ class CodecTest {
 
     @Test
     void isLowerHex64RejectsViolations() {
-        assertTrue(Codec.isLowerHex64("0".repeat(64)));
-        assertFalse(Codec.isLowerHex64("0".repeat(63)));                 // 长度不足（header-wrong-hex-len 同源）
-        assertFalse(Codec.isLowerHex64("0".repeat(65)));
-        assertFalse(Codec.isLowerHex64("ABCDEF".repeat(10) + "ab"));     // 大写（header-uppercase-hex 同源）
-        assertFalse(Codec.isLowerHex64("g".repeat(64)));                 // 非 hex 字符
+        assertTrue(Codec.isLowerHex64(TestText.repeat("0", 64)));
+        assertFalse(Codec.isLowerHex64(TestText.repeat("0", 63)));        // 长度不足（header-wrong-hex-len 同源）
+        assertFalse(Codec.isLowerHex64(TestText.repeat("0", 65)));
+        assertFalse(Codec.isLowerHex64(TestText.repeat("ABCDEF", 10) + "ab"));   // 大写（header-uppercase-hex 同源）
+        assertFalse(Codec.isLowerHex64(TestText.repeat("g", 64)));        // 非 hex 字符
         assertFalse(Codec.isLowerHex64(null));
         assertFalse(Codec.isLowerHex64(""));
     }

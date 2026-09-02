@@ -36,4 +36,19 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <!-- unirest-java-core 4.x 字节码 major 55（Java 11+），运行时无法在 JDK 8 加载：
+       本模块 main 源码仍按根 pom release 8 参与编译门禁；JDK <11 下仅跳过测试执行。
+       JDK 8 用户请改用 okhttp/jdkhttp 适配器（见 README 模块表）。 -->
+  <profiles>
+    <profile>
+      <id>pre-java11-skip-tests</id>
+      <activation>
+        <jdk>(,11)</jdk>
+      </activation>
+      <properties>
+        <maven.test.skip>true</maven.test.skip>
+      </properties>
+    </profile>
+  </profiles>
 </project>

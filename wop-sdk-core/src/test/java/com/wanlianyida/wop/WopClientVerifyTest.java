@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,8 +48,24 @@ class WopClientVerifyTest {
             .merchantPrivateKey(MERCHANT_PRIV).platformPublicKey(PLATFORM_PUB)
             .build();
 
-    /** 平台响应快照。 */
-    record PlatformResponse(Map<String, String> headers, byte[] wire) {
+    /** 平台响应快照（record 等价值语义不需要，纯数据载体）。 */
+    static final class PlatformResponse {
+
+        private final Map<String, String> headers;
+        private final byte[] wire;
+
+        PlatformResponse(Map<String, String> headers, byte[] wire) {
+            this.headers = headers;
+            this.wire = wire;
+        }
+
+        Map<String, String> headers() {
+            return headers;
+        }
+
+        byte[] wire() {
+            return wire;
+        }
     }
 
     /** 平台侧响应拼装（镜像 SignFilter.post + CryptoFilter.post 出站行为）。 */
@@ -202,12 +220,12 @@ class WopClientVerifyTest {
     @Test
     void missingSignHeaderExplicit() {
         assertEquals(VerifyResult.Reason.MISSING_SIGN_HEADER,
-                client.verifyResponse(Map.of(), Codec.utf8("{}"), "/p").reason());
+                client.verifyResponse(new LinkedHashMap<String, String>(), Codec.utf8("{}"), "/p").reason());
     }
 
     @Test
     void malformedSignHeaderExplicit() {
-        VerifyResult result = client.verifyResponse(Map.of("x-wop-sign", "garbage"),
+        VerifyResult result = client.verifyResponse(Collections.singletonMap("x-wop-sign", "garbage"),
                 Codec.utf8("{}"), "/p");
         assertEquals(VerifyResult.Reason.INVALID_SIGN_HEADER, result.reason());
         assertTrue(result.message().contains("格式错误"));
@@ -242,7 +260,7 @@ class WopClientVerifyTest {
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         resp.headers().remove("x-wop-content-digest");
-        reSignWith(resp.headers(), "/p", List.of("x-wop-nonce", "x-wop-timestamp"));
+        reSignWith(resp.headers(), "/p", Arrays.asList("x-wop-nonce", "x-wop-timestamp"));
         assertEquals(VerifyResult.Reason.MISSING_DIGEST_HEADER,
                 client.verifyResponse(resp.headers(), body, "/p").reason());
     }
@@ -267,7 +285,7 @@ class WopClientVerifyTest {
         for (String badDigest : bad) {
             PlatformResponse resp = RSA_RIG.respond("/p", body, false);
             resp.headers().put("x-wop-content-digest", badDigest);
-            reSignWith(resp.headers(), "/p", List.of(
+            reSignWith(resp.headers(), "/p", Arrays.asList(
                     "x-wop-content-digest", "x-wop-nonce", "x-wop-timestamp"));
             VerifyResult result = client.verifyResponse(resp.headers(), body, "/p");
             assertEquals(VerifyResult.Reason.INVALID_DIGEST_HEADER, result.reason(), badDigest);
@@ -279,7 +297,7 @@ class WopClientVerifyTest {
         // I1 负向量：digest 头存在但未入签 → body 退回无保护，必须拒
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
-        reSignWith(resp.headers(), "/p", List.of("x-wop-nonce", "x-wop-timestamp"));
+        reSignWith(resp.headers(), "/p", Arrays.asList("x-wop-nonce", "x-wop-timestamp"));
         assertEquals(VerifyResult.Reason.MISSING_SIGNED_HEADER,
                 client.verifyResponse(resp.headers(), body, "/p").reason());
     }
@@ -288,7 +306,7 @@ class WopClientVerifyTest {
     void encryptNotInSignedHeadersRejected() {
         byte[] plain = Codec.utf8("secret");
         PlatformResponse resp = RSA_RIG.respond("/p", plain, true);
-        reSignWith(resp.headers(), "/p", List.of(
+        reSignWith(resp.headers(), "/p", Arrays.asList(
                 "x-wop-content-digest", "x-wop-nonce", "x-wop-timestamp"));
         assertEquals(VerifyResult.Reason.MISSING_SIGNED_HEADER,
                 client.verifyResponse(resp.headers(), resp.wire(), "/p").reason());
@@ -333,7 +351,7 @@ class WopClientVerifyTest {
         wire[wire.length - 3] = wire[wire.length - 3] == 'B' ? (byte) 'C' : (byte) 'B';
         // 重算 digest 并重签，直达解密层
         resp.headers().put("x-wop-content-digest", ContentDigest.build(RSA, wire));
-        reSignWith(resp.headers(), "/p", List.of(
+        reSignWith(resp.headers(), "/p", Arrays.asList(
                 "x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"));
         VerifyResult result = client.verifyResponse(resp.headers(), wire, "/p");
         assertFalse(result.ok());
@@ -346,7 +364,7 @@ class WopClientVerifyTest {
         byte[] plain = Codec.utf8("plain");
         PlatformResponse resp = RSA_RIG.respond("/p", plain, true);
         resp.headers().put("x-wop-encrypt", "L2;dek=AAAA");
-        reSignWith(resp.headers(), "/p", List.of(
+        reSignWith(resp.headers(), "/p", Arrays.asList(
                 "x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"));
         assertEquals(VerifyResult.Reason.DECRYPT_FAILED,
                 client.verifyResponse(resp.headers(), resp.wire(), "/p").reason());
@@ -363,7 +381,7 @@ class WopClientVerifyTest {
         PublicKey merchantPub = KeyCodec.parsePublicKey(MERCHANT_PUB, RSA);
         byte[] wrapped = RSA.keyEncrypt().encrypt(Codec.utf8(payload), merchantPub);
         resp.headers().put("x-wop-encrypt", EncryptHeader.buildL2(Codec.b64UrlEncode(wrapped)));
-        reSignWith(resp.headers(), "/p", List.of(
+        reSignWith(resp.headers(), "/p", Arrays.asList(
                 "x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"));
         VerifyResult result = client.verifyResponse(resp.headers(), resp.wire(), "/p");
         assertEquals(VerifyResult.Reason.DEK_ALG_MISMATCH, result.reason());
@@ -375,7 +393,7 @@ class WopClientVerifyTest {
         PlatformResponse resp = RSA_RIG.respond("/p", Codec.utf8("x"), true);
         byte[] notEnvelope = Codec.utf8("{\"other\":1}");
         resp.headers().put("x-wop-content-digest", ContentDigest.build(RSA, notEnvelope));
-        reSignWith(resp.headers(), "/p", List.of(
+        reSignWith(resp.headers(), "/p", Arrays.asList(
                 "x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"));
         assertEquals(VerifyResult.Reason.INVALID_ENCRYPTED_BODY,
                 client.verifyResponse(resp.headers(), notEnvelope, "/p").reason());
@@ -385,7 +403,7 @@ class WopClientVerifyTest {
     void l2InvalidEncryptHeaderExplicit() {
         PlatformResponse resp = RSA_RIG.respond("/p", Codec.utf8("x"), true);
         resp.headers().put("x-wop-encrypt", "L9;dek=abc");
-        reSignWith(resp.headers(), "/p", List.of(
+        reSignWith(resp.headers(), "/p", Arrays.asList(
                 "x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"));
         assertEquals(VerifyResult.Reason.INVALID_ENCRYPT_HEADER,
                 client.verifyResponse(resp.headers(), resp.wire(), "/p").reason());

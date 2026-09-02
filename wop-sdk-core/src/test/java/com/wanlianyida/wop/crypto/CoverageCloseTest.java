@@ -1,11 +1,13 @@
 package com.wanlianyida.wop.crypto;
 
+import com.wanlianyida.wop.TestText;
 import com.wanlianyida.wop.WopSdkException;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.spec.ECGenParameterSpec;
 
@@ -94,7 +96,7 @@ class CoverageCloseTest {
         // secp256r1 密钥喂 SM2 策略：曲线守卫逐项拒绝（I5）
         KeyPairGenerator generator = KeyPairGenerator.getInstance("EC", new BouncyCastleProvider());
         generator.initialize(new ECGenParameterSpec("secp256r1"));
-        var pair = generator.generateKeyPair();
+        KeyPair pair = generator.generateKeyPair();
         assertThrows(CryptoException.class,
                 () -> Sm2SignatureStrategy.INSTANCE.verify(Codec.utf8("m"), new byte[64], pair.getPublic()));
         assertThrows(CryptoException.class,
@@ -119,8 +121,8 @@ class CoverageCloseTest {
         assertEquals("", Codec.hexLower(null));
         assertArrayEquals(new byte[0], Codec.utf8(null));
         assertArrayEquals(new byte[0], Codec.concat());
-        assertFalse(Codec.isLowerHex64("g".repeat(64)));
-        assertFalse(Codec.isLowerHex64("0".repeat(32)));
+        assertFalse(Codec.isLowerHex64(TestText.repeat("g", 64)));
+        assertFalse(Codec.isLowerHex64(TestText.repeat("0", 32)));
     }
 
     @Test
@@ -154,8 +156,8 @@ class CoverageCloseTest {
 
     @Test
     void canonicalRequestSingleHeaderAndEdges() {
-        assertEquals("a:1", CanonicalRequest.canonicalHeaders(java.util.Map.of("a", "1")));
-        assertEquals("", CanonicalRequest.canonicalHeaders(java.util.Map.of()));
+        assertEquals("a:1", CanonicalRequest.canonicalHeaders(java.util.Collections.singletonMap("a", "1")));
+        assertEquals("", CanonicalRequest.canonicalHeaders(new java.util.LinkedHashMap<String, String>()));
         assertEquals("", CanonicalRequest.urlencode(""));
         assertEquals("", CanonicalRequest.trimall(" "));
     }

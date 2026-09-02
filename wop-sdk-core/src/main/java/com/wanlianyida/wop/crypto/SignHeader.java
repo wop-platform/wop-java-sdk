@@ -3,7 +3,9 @@ package com.wanlianyida.wop.crypto;
 import com.wanlianyida.wop.WopSdkException;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * F3 结构化签名头 x-wop-sign 编解码。
@@ -18,9 +20,85 @@ public final class SignHeader {
     /** 签名协议版本（唯一支持）。 */
     public static final String PROTOCOL_VERSION = "v1";
 
-    /** 解析结果（不可变）。 */
-    public record Parsed(String securityReq, String protocolVersion, long expiredSeconds,
-                         List<String> signedHeaders, String signature) {
+    /** 解析结果（不可变，record 等价值语义：equals/hashCode 按全部字段）。 */
+    public static final class Parsed {
+
+        /** 算法套件名（如 WOP-RSA3072-SHA256）。 */
+        private final String securityReq;
+
+        /** 签名协议版本（v1）。 */
+        private final String protocolVersion;
+
+        /** 签名有效期（秒）。 */
+        private final long expiredSeconds;
+
+        /** 纳入签名的请求头（已 trim，不可变列表）。 */
+        private final List<String> signedHeaders;
+
+        /** 签名 base64url。 */
+        private final String signature;
+
+        public Parsed(String securityReq, String protocolVersion, long expiredSeconds,
+                      List<String> signedHeaders, String signature) {
+            this.securityReq = securityReq;
+            this.protocolVersion = protocolVersion;
+            this.expiredSeconds = expiredSeconds;
+            this.signedHeaders = signedHeaders;
+            this.signature = signature;
+        }
+
+        /** 算法套件名（如 WOP-RSA3072-SHA256）。 */
+        public String securityReq() {
+            return securityReq;
+        }
+
+        /** 签名协议版本（v1）。 */
+        public String protocolVersion() {
+            return protocolVersion;
+        }
+
+        /** 签名有效期（秒）。 */
+        public long expiredSeconds() {
+            return expiredSeconds;
+        }
+
+        /** 纳入签名的请求头（已 trim，不可变列表）。 */
+        public List<String> signedHeaders() {
+            return signedHeaders;
+        }
+
+        /** 签名 base64url。 */
+        public String signature() {
+            return signature;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof Parsed)) {
+                return false;
+            }
+            Parsed that = (Parsed) o;
+            return expiredSeconds == that.expiredSeconds
+                    && Objects.equals(securityReq, that.securityReq)
+                    && Objects.equals(protocolVersion, that.protocolVersion)
+                    && Objects.equals(signedHeaders, that.signedHeaders)
+                    && Objects.equals(signature, that.signature);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(securityReq, protocolVersion, expiredSeconds, signedHeaders, signature);
+        }
+
+        @Override
+        public String toString() {
+            return "Parsed[securityReq=" + securityReq + ", protocolVersion=" + protocolVersion
+                    + ", expiredSeconds=" + expiredSeconds + ", signedHeaders=" + signedHeaders
+                    + ", signature=" + signature + "]";
+        }
     }
 
     /** 工具类禁实例化。 */
@@ -29,7 +107,7 @@ public final class SignHeader {
 
     /** 严格解析；格式非法抛明确异常（解析类，10.2）。 */
     public static Parsed parse(String header) {
-        if (header == null || header.isBlank()) {
+        if (header == null || header.trim().isEmpty()) {
             throw new WopSdkException("缺少 x-wop-sign 请求头");
         }
         String trimmed = header.trim();
@@ -90,6 +168,6 @@ public final class SignHeader {
             }
             result.add(trimmed);
         }
-        return List.copyOf(result);
+        return Collections.unmodifiableList(new ArrayList<>(result));
     }
 }

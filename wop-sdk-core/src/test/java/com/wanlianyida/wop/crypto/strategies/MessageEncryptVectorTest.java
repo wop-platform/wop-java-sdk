@@ -1,4 +1,5 @@
 package com.wanlianyida.wop.crypto.strategies;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.wanlianyida.wop.crypto.CryptoException;
 import com.wanlianyida.wop.crypto.Codec;
 import com.wanlianyida.wop.InteropConformanceTest;
@@ -19,7 +20,7 @@ class MessageEncryptVectorTest {
 
     @Test
     void aes256GcmMatchesGoldenVector() {
-        var vector = TestVectors.firstById("messageEncrypt", "aesgcm-encrypt");
+        JsonNode vector = TestVectors.firstById("messageEncrypt", "aesgcm-encrypt");
         Aes256GcmStrategy strategy = Aes256GcmStrategy.INSTANCE;
         assertEquals("AES-256-GCM", strategy.algorithmName());
         assertEquals(32, strategy.keyLength());
@@ -39,7 +40,7 @@ class MessageEncryptVectorTest {
 
     @Test
     void sm4GcmMatchesGoldenVector() {
-        var vector = TestVectors.firstById("messageEncrypt", "sm4gcm-encrypt");
+        JsonNode vector = TestVectors.firstById("messageEncrypt", "sm4gcm-encrypt");
         Sm4GcmStrategy strategy = Sm4GcmStrategy.INSTANCE;
         assertEquals("SM4-GCM", strategy.algorithmName());
         assertEquals(16, strategy.keyLength());
@@ -57,7 +58,7 @@ class MessageEncryptVectorTest {
     @Test
     void gcmTamperRejected() {
         // A2 负向量：tag/密文篡改必须拒绝（AEAD）
-        var vector = TestVectors.firstById("messageEncrypt", "aesgcm-encrypt");
+        JsonNode vector = TestVectors.firstById("messageEncrypt", "aesgcm-encrypt");
         byte[] key = Codec.b64UrlDecode(vector.path("keyB64u").asText());
         byte[] iv = Codec.b64UrlDecode(vector.path("ivB64u").asText());
         byte[] plain = Codec.b64UrlDecode(vector.path("plaintextB64u").asText());
@@ -75,7 +76,7 @@ class MessageEncryptVectorTest {
 
     @Test
     void gcmWrongKeyRejected() {
-        var vector = TestVectors.firstById("messageEncrypt", "aesgcm-encrypt");
+        JsonNode vector = TestVectors.firstById("messageEncrypt", "aesgcm-encrypt");
         byte[] key = Codec.b64UrlDecode(vector.path("keyB64u").asText());
         byte[] plain = Codec.b64UrlDecode(vector.path("plaintextB64u").asText());
         CipherResult result = Aes256GcmStrategy.INSTANCE.encrypt(plain, key);

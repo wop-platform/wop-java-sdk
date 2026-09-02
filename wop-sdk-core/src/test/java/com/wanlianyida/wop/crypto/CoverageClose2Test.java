@@ -1,5 +1,6 @@
 package com.wanlianyida.wop.crypto;
 
+import com.wanlianyida.wop.TestText;
 import com.wanlianyida.wop.VerifyResult;
 import com.wanlianyida.wop.crypto.strategies.Aes256GcmStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sm2Support;
@@ -28,11 +29,11 @@ class CoverageClose2Test {
 
     @Test
     void isLowerHex64CharClassCombinations() {
-        assertTrue(Codec.isLowerHex64("0123456789abcdef".repeat(4)));
-        assertFalse(Codec.isLowerHex64(":".repeat(64)));   // '9' 之后
-        assertFalse(Codec.isLowerHex64("/".repeat(64)));   // '9' 与 'a' 之间
-        assertFalse(Codec.isLowerHex64("`".repeat(64)));   // 'f' 之后
-        assertFalse(Codec.isLowerHex64("@".repeat(64)));   // 'Z' 与 'a' 之间
+        assertTrue(Codec.isLowerHex64(TestText.repeat("0123456789abcdef", 4)));
+        assertFalse(Codec.isLowerHex64(TestText.repeat(":", 64)));   // '9' 之后
+        assertFalse(Codec.isLowerHex64(TestText.repeat("/", 64)));   // '9' 与 'a' 之间
+        assertFalse(Codec.isLowerHex64(TestText.repeat("`", 64)));   // 'f' 之后
+        assertFalse(Codec.isLowerHex64(TestText.repeat("@", 64)));   // 'Z' 与 'a' 之间
     }
 
     @Test
@@ -56,7 +57,7 @@ class CoverageClose2Test {
         wrongPrefix[0] = 0x02;
         assertThrows(IllegalArgumentException.class, () -> Sm2Support.decodePoint(wrongPrefix));
         assertThrows(IllegalArgumentException.class, () -> Sm2Support.requireValidD(BigInteger.ZERO));
-        assertThrows(IllegalArgumentException.class, () -> Sm2Support.requireValidD(BigInteger.TWO.pow(300)));
+        assertThrows(IllegalArgumentException.class, () -> Sm2Support.requireValidD(BigInteger.valueOf(2).pow(300)));
         Sm2Support.requireValidD(BigInteger.ONE);
     }
 

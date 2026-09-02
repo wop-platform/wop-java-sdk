@@ -23,7 +23,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <maven.compiler.release>17</maven.compiler.release>
+    <maven.compiler.release>8</maven.compiler.release>
     <bc.version>1.84</bc.version>
     <junit.version>5.12.2</junit.version>
     <okhttp.version>4.12.0</okhttp.version>

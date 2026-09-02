@@ -3,6 +3,7 @@ package com.wanlianyida.wop.crypto;
 import com.wanlianyida.wop.crypto.strategies.DigestStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sha256DigestStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sm3DigestStrategy;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -16,7 +17,7 @@ class DigestStrategyVectorTest {
 
     @Test
     void sha256MatchesGoldenVector() {
-        var vector = TestVectors.firstById("digest", "digest-sha256");
+        JsonNode vector = TestVectors.firstById("digest", "digest-sha256");
         DigestStrategy strategy = Sha256DigestStrategy.INSTANCE;
         assertEquals("SHA-256", strategy.algorithmName());
         byte[] hash = strategy.digest(vector.path("input").asText().getBytes(StandardCharsets.UTF_8));
@@ -27,7 +28,7 @@ class DigestStrategyVectorTest {
 
     @Test
     void sm3MatchesGoldenVector() {
-        var vector = TestVectors.firstById("digest", "digest-sm3");
+        JsonNode vector = TestVectors.firstById("digest", "digest-sm3");
         DigestStrategy strategy = Sm3DigestStrategy.INSTANCE;
         assertEquals("SM3", strategy.algorithmName());
         byte[] hash = strategy.digest(vector.path("input").asText().getBytes(StandardCharsets.UTF_8));

@@ -28,9 +28,10 @@ public final class Sm2Support {
 
     /** JCA BCEC 公钥 → BC 轻量参数（曲线守卫）。 */
     public static ECPublicKeyParameters toPublicParams(PublicKey publicKey) {
-        if (!(publicKey instanceof ECPublicKey ec)) {
+        if (!(publicKey instanceof ECPublicKey)) {
             throw new IllegalArgumentException("公钥非 SM2 椭圆曲线密钥");
         }
+        ECPublicKey ec = (ECPublicKey) publicKey;
         return new ECPublicKeyParameters(ec.getQ(), domainOf(ec.getParameters()));
     }
 
@@ -41,9 +42,10 @@ public final class Sm2Support {
 
     /** JCA BCEC 私钥 → BC 轻量参数（曲线守卫）。 */
     public static ECPrivateKeyParameters toPrivateParams(PrivateKey privateKey) {
-        if (!(privateKey instanceof ECPrivateKey ec)) {
+        if (!(privateKey instanceof ECPrivateKey)) {
             throw new IllegalArgumentException("私钥非 SM2 椭圆曲线密钥");
         }
+        ECPrivateKey ec = (ECPrivateKey) privateKey;
         return new ECPrivateKeyParameters(ec.getD(), domainOf(ec.getParameters()));
     }
 

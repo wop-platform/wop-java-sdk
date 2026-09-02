@@ -4,6 +4,7 @@ import com.wanlianyida.wop.RequestDraft;
 import com.wanlianyida.wop.TransportResponse;
 import com.wanlianyida.wop.WopSdkException;
 import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.RecordedRequest;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Unirest 适配器：MockWebServer 覆盖请求映射/响应映射/错误传播。
  */
 class UnirestTransportTest {
+
+    /** Java 8 无 Map.of：成对参数构造小请求头。 */
+    private static java.util.Map<String, String> headers(String... kv) {
+        java.util.Map<String, String> map = new java.util.LinkedHashMap<String, String>();
+        for (int i = 0; i < kv.length; i += 2) {
+            map.put(kv[i], kv[i + 1]);
+        }
+        return map;
+    }
 
     private final MockWebServer server = new MockWebServer();
 
@@ -54,7 +64,7 @@ class UnirestTransportTest {
         assertEquals("{\"ok\":true}", new String(response.body(), StandardCharsets.UTF_8));
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("x-wop-sign"));
 
-        var recorded = server.takeRequest();
+        RecordedRequest recorded = server.takeRequest();
         assertEquals("POST", recorded.getMethod());
         assertEquals("/gateway/x", recorded.getPath());
         assertEquals("app_001", recorded.getHeader("x-wop-appkey"));
@@ -85,11 +95,11 @@ class UnirestTransportTest {
         UnirestTransport transport = new UnirestTransport(server.url("/").toString().replaceAll("/$", ""));
 
         TransportResponse response = transport.send(
-                new RequestDraft("GET", "/p", Map.of("x-wop-appkey", "a"), null));
+                new RequestDraft("GET", "/p", headers("x-wop-appkey", "a"), null));
         assertEquals(204, response.statusCode());
         assertEquals(0, response.body().length);
 
-        var recorded = server.takeRequest();
+        RecordedRequest recorded = server.takeRequest();
         assertEquals("GET", recorded.getMethod());
         assertEquals(0, recorded.getBodySize());
     }
@@ -100,9 +110,9 @@ class UnirestTransportTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("HEAD", "/p", Map.of("x-wop-appkey", "a"), new byte[]{1, 2}));
+                new RequestDraft("HEAD", "/p", headers("x-wop-appkey", "a"), new byte[]{1, 2}));
         assertEquals(200, response.statusCode());
-        var recorded = server.takeRequest();
+        RecordedRequest recorded = server.takeRequest();
         assertEquals("HEAD", recorded.getMethod());
         assertEquals(0, recorded.getBodySize());
     }
@@ -113,7 +123,7 @@ class UnirestTransportTest {
         server.start();
         UnirestTransport transport = new UnirestTransport("http://invalid.example");
         TransportResponse response = transport.send(
-                new RequestDraft("POST", server.url("/abs").toString(), Map.of(), new byte[]{1}));
+                new RequestDraft("POST", server.url("/abs").toString(), headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals("/abs", server.takeRequest().getPath());
     }
@@ -122,7 +132,7 @@ class UnirestTransportTest {
     void relativePathWithoutBaseUrlRejected() {
         UnirestTransport transport = new UnirestTransport((String) null);
         WopSdkException ex = assertThrows(WopSdkException.class,
-                () -> transport.send(new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                () -> transport.send(new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("baseUrl"));
     }
 
@@ -135,7 +145,7 @@ class UnirestTransportTest {
         }
         UnirestTransport transport = new UnirestTransport("http://127.0.0.1:" + port);
         assertThrows(WopSdkException.class,
-                () -> transport.send(new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                () -> transport.send(new RequestDraft("POST", "/p", headers(), new byte[]{1})));
     }
 
     @Test
@@ -144,7 +154,7 @@ class UnirestTransportTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertNull(response.headers().get("x-wop-sign"));
         assertEquals(0, response.body().length);
@@ -157,21 +167,21 @@ class UnirestTransportTest {
         // 尾斜杠 baseUrl + 无斜杠相对 path
         UnirestTransport trailing = new UnirestTransport(server.url("/sub/").toString());
         TransportResponse response = trailing.send(
-                new RequestDraft("POST", "gateway/x", Map.of("x-wop-appkey", "a"), new byte[]{1}));
+                new RequestDraft("POST", "gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals("/sub/gateway/x", server.takeRequest().getPath());
 
         // 无参构造（无 baseUrl）+ 相对 path → 明确拒绝
         UnirestTransport noArg = new UnirestTransport();
         assertThrows(WopSdkException.class, () -> noArg.send(
-                new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
     }
 
     @Test
     void blankBaseUrlTreatedAsAbsent() {
         UnirestTransport blank = new UnirestTransport("   ");
         assertThrows(WopSdkException.class, () -> blank.send(
-                new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
     }
 
     // spec:max-response-bytes —— 11MB 上限边界：超 1 字节拒 / 恰好上限过（流式计数，读取过程中生效）
@@ -183,7 +193,7 @@ class UnirestTransportTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("上限"));
     }
 
@@ -196,7 +206,7 @@ class UnirestTransportTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals(UnirestTransport.MAX_RESPONSE_BYTES, response.body().length);
         assertArrayEquals(exact, response.body());
@@ -208,9 +218,9 @@ class UnirestTransportTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("GET", "/p", Map.of("x-wop-appkey", "a"), new byte[]{9}));
+                new RequestDraft("GET", "/p", headers("x-wop-appkey", "a"), new byte[]{9}));
         assertEquals(200, response.statusCode());
-        var recorded = server.takeRequest();
+        RecordedRequest recorded = server.takeRequest();
         assertEquals("GET", recorded.getMethod());
         assertEquals(0, recorded.getBodySize());
     }
@@ -223,7 +233,7 @@ class UnirestTransportTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals("chunked-body", new String(response.body(), StandardCharsets.UTF_8));
     }
