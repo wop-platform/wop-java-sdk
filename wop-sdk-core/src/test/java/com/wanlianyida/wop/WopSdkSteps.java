@@ -28,7 +28,7 @@ public class WopSdkSteps {
     private WopClient client;
     private RequestDraft draft;
     private VerifyResult verify;
-    private WopSdkException lastError;
+    private RuntimeException lastError;
     private AlgorithmSuite parsedSuite;
     private final List<String> nonceTrack = new ArrayList<>();
 
@@ -316,7 +316,7 @@ public class WopSdkSteps {
             parsedSuite = AlgorithmSuite.parse(suite);
             lastError = null;
         } catch (RuntimeException e) {
-            lastError = new WopSdkException(e.getMessage());
+            lastError = e;
         }
     }
 
@@ -356,7 +356,7 @@ public class WopSdkSteps {
             Codec.b64UrlDecode(s);
             lastError = null;
         } catch (IllegalArgumentException e) {
-            lastError = new WopSdkException(e.getMessage());
+            lastError = e;
         }
     }
 
@@ -388,7 +388,7 @@ public class WopSdkSteps {
         try {
             client = fixedClient("WOP-RSA3072-SHA256", key, RSA_PUB);
             lastError = null;
-        } catch (WopSdkException e) {
+        } catch (WopError e) {
             lastError = e;
         }
     }
@@ -436,7 +436,7 @@ public class WopSdkSteps {
         try {
             r.run();
             lastError = null;
-        } catch (WopSdkException e) {
+        } catch (WopError e) {
             lastError = e;
         }
     }
@@ -484,7 +484,7 @@ public class WopSdkSteps {
             signed.forEach(n -> sub.put(n, headers.get(n)));
             String canonical = CanonicalRequest.build("v1/1800", "POST", path, "",
                     CanonicalRequest.canonicalHeaders(sub));
-            byte[] sig = suite.signature().sign(Codec.utf8(canonical), platformPriv);
+            byte[] sig = suite.signature().sign(Codec.utf8(canonical), platformPriv, Codec.utf8("1234567812345678"));
             headers.put("x-wop-sign", SignHeader.build(suite.securityReq(), 1800, signed, Codec.b64UrlEncode(sig)));
             return new PlatformResponse(headers, wire);
         }

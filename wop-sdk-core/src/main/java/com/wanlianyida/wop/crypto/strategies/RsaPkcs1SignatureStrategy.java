@@ -10,6 +10,7 @@ import java.security.Signature;
  * 国际签名策略：SHA256withRSA（PKCS#1 v1.5）。
  * <p>
  * RSA PKCS#1 v1.5 签名确定性——同密钥同消息字节级一致（黄金向量直接锚定）。
+ * userId 对 RSA 无意义（D14 仅 SM2 需要），实现忽略入参。
  */
 public final class RsaPkcs1SignatureStrategy implements SignatureStrategy {
 
@@ -21,9 +22,9 @@ public final class RsaPkcs1SignatureStrategy implements SignatureStrategy {
     private RsaPkcs1SignatureStrategy() {
     }
 
-    /** 加签（PKCS#1 v1.5 确定性:同密钥同消息字节级一致）。 */
+    /** 加签（PKCS#1 v1.5 确定性:同密钥同消息字节级一致；userId 忽略）。 */
     @Override
-    public byte[] sign(byte[] data, PrivateKey privateKey) {
+    public byte[] sign(byte[] data, PrivateKey privateKey, byte[] userId) {
         try {
             Signature signer = Signature.getInstance(ALGORITHM);
             signer.initSign(privateKey);
@@ -34,9 +35,9 @@ public final class RsaPkcs1SignatureStrategy implements SignatureStrategy {
         }
     }
 
-    /** 验签。 */
+    /** 验签（userId 忽略）。 */
     @Override
-    public boolean verify(byte[] data, byte[] signature, PublicKey publicKey) {
+    public boolean verify(byte[] data, byte[] signature, PublicKey publicKey, byte[] userId) {
         try {
             Signature verifier = Signature.getInstance(ALGORITHM);
             verifier.initVerify(publicKey);

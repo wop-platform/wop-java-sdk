@@ -1,6 +1,6 @@
 package com.wanlianyida.wop.crypto;
 
-import com.wanlianyida.wop.WopSdkException;
+import com.wanlianyida.wop.WopError;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -105,30 +105,30 @@ public final class SignHeader {
     private SignHeader() {
     }
 
-    /** 严格解析；格式非法抛明确异常（解析类，10.2）。 */
+    /** 严格解析；格式非法抛 {@link WopError#parse}（协议解析类，10.2）。 */
     public static Parsed parse(String header) {
         if (header == null || header.trim().isEmpty()) {
-            throw new WopSdkException("缺少 x-wop-sign 请求头");
+            throw WopError.parse("缺少 x-wop-sign 请求头");
         }
         String trimmed = header.trim();
         int space = trimmed.indexOf(' ');
         if (space <= 0) {
-            throw new WopSdkException("x-wop-sign 格式错误：缺少 securityReq 与 authString 的空格分隔");
+            throw WopError.parse("x-wop-sign 格式错误：缺少 securityReq 与 authString 的空格分隔");
         }
         String securityReq = trimmed.substring(0, space);
         String[] segments = trimmed.substring(space + 1).split("/", -1);
         if (segments.length != 4) {
-            throw new WopSdkException("x-wop-sign 格式错误：应为 <protocolVersion>/<expiredSeconds>/<signedHeaders>/<signature> 四段（实际 "
+            throw WopError.parse("x-wop-sign 格式错误：应为 <protocolVersion>/<expiredSeconds>/<signedHeaders>/<signature> 四段（实际 "
                     + segments.length + " 段）");
         }
         if (!PROTOCOL_VERSION.equals(segments[0])) {
-            throw new WopSdkException("不支持的签名协议版本: " + segments[0] + "（期望 v1）");
+            throw WopError.parse("不支持的签名协议版本: " + segments[0] + "（期望 v1）");
         }
         long expiredSeconds = parseExpiredSeconds(segments[1]);
         List<String> signedHeaders = parseSignedHeaders(segments[2]);
         String signature = segments[3];
         if (signature.isEmpty()) {
-            throw new WopSdkException("x-wop-sign signature 段为空");
+            throw WopError.parse("x-wop-sign signature 段为空");
         }
         return new Parsed(securityReq, segments[0], expiredSeconds, signedHeaders, signature);
     }
@@ -146,10 +146,10 @@ public final class SignHeader {
         try {
             value = Long.parseLong(raw);
         } catch (NumberFormatException e) {
-            throw new WopSdkException("x-wop-sign expiredSeconds 非数字: '" + raw + "'");
+            throw WopError.parse("x-wop-sign expiredSeconds 非数字: '" + raw + "'");
         }
         if (value <= 0) {
-            throw new WopSdkException("x-wop-sign expiredSeconds 须为正整数: " + value);
+            throw WopError.parse("x-wop-sign expiredSeconds 须为正整数: " + value);
         }
         return value;
     }
@@ -157,14 +157,14 @@ public final class SignHeader {
     /** 解析 signedHeaders 段（分号拆分，空段拒绝，返回不可变列表）。 */
     private static List<String> parseSignedHeaders(String raw) {
         if (raw.isEmpty()) {
-            throw new WopSdkException("x-wop-sign signedHeaders 段为空");
+            throw WopError.parse("x-wop-sign signedHeaders 段为空");
         }
         String[] names = raw.split(";", -1);
         List<String> result = new ArrayList<>(names.length);
         for (String name : names) {
             String trimmed = name.trim();
             if (trimmed.isEmpty()) {
-                throw new WopSdkException("x-wop-sign signedHeaders 含空段: '" + raw + "'");
+                throw WopError.parse("x-wop-sign signedHeaders 含空段: '" + raw + "'");
             }
             result.add(trimmed);
         }

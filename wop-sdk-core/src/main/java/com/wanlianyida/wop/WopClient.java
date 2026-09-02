@@ -45,6 +45,9 @@ public final class WopClient {
     private static final String HEADER_DIGEST = "x-wop-content-digest";
     private static final String HEADER_ENCRYPT = "x-wop-encrypt";
 
+    /** 平台响应签名 userId（协议固定值，与 Go 参考实现 sm2PlatformUserID 一致；仅入向验签使用，
+     *  非出向默认回退——出向恒为 x-wop-appkey 头值，D14）。 */
+    private static final byte[] PLATFORM_SIGN_USER_ID = "1234567812345678".getBytes(StandardCharsets.UTF_8);
     private final Config config;
     private final AlgorithmSuite suite;
     private final PrivateKey merchantPrivateKey;
@@ -86,18 +89,18 @@ public final class WopClient {
      */
     public RequestDraft buildRequest(String method, String path, byte[] body, SecurityLevel level) {
         if (method == null || method.trim().isEmpty()) {
-            throw new WopSdkException("HTTP method 为空");
+            throw WopError.configuration("HTTP method 为空");
         }
         if (path == null || path.trim().isEmpty()) {
-            throw new WopSdkException("请求路径为空");
+            throw WopError.configuration("请求路径为空");
         }
         if (level == null) {
-            throw new WopSdkException("SecurityLevel 为空（L0|L2）");
+            throw WopError.configuration("SecurityLevel 为空（L0|L2）");
         }
         String upperMethod = method.trim().toUpperCase(java.util.Locale.ROOT);
         boolean hasBody = body != null && body.length > 0;
         if (level == SecurityLevel.L2 && !hasBody) {
-            throw new WopSdkException("L2 加密需要非空 body");
+            throw WopError.configuration("L2 加密需要非空 body");
         }
 
         byte[] wireBody = body;
@@ -138,7 +141,9 @@ public final class WopClient {
         String authString = SignHeader.PROTOCOL_VERSION + "/" + config.expiredSeconds();
         String canonical = CanonicalRequest.build(authString, upperMethod, path, "",
                 CanonicalRequest.canonicalHeaders(subMap(headers, signedHeaders)));
-        byte[] signature = suite.signature().sign(Codec.utf8(canonical), merchantPrivateKey);
+        // D14：SM2 出向签名 userId = 请求身份（x-wop-appkey）；RSA 忽略
+        byte[] signature = suite.signature().sign(Codec.utf8(canonical), merchantPrivateKey,
+                Codec.utf8(config.appKey()));
         headers.put(HEADER_SIGN, SignHeader.build(suite.securityReq(), config.expiredSeconds(),
                 signedHeaders, Codec.b64UrlEncode(signature)));
 
@@ -174,7 +179,7 @@ public final class WopClient {
         SignHeader.Parsed sign;
         try {
             sign = SignHeader.parse(signHeader);
-        } catch (WopSdkException e) {
+        } catch (WopError e) {
             return VerifyResult.fail(VerifyResult.Reason.INVALID_SIGN_HEADER, e.getMessage());
         }
 
@@ -194,7 +199,7 @@ public final class WopClient {
         EncryptHeader.Parsed encrypt;
         try {
             encrypt = EncryptHeader.parse(lower.get(HEADER_ENCRYPT));
-        } catch (WopSdkException e) {
+        } catch (WopError e) {
             return VerifyResult.fail(VerifyResult.Reason.INVALID_ENCRYPT_HEADER, e.getMessage());
         }
 
@@ -241,7 +246,9 @@ public final class WopClient {
         }
         boolean verified = false;
         try {
-            verified = inboundSuite.signature().verify(Codec.utf8(canonical), signature, platformPublicKey);
+            // D14：入向验签 userId = 平台协议固定值（与 Go 参考实现 sm2PlatformUserID 一致，仅入向）
+            verified = inboundSuite.signature().verify(Codec.utf8(canonical), signature,
+                    platformPublicKey, PLATFORM_SIGN_USER_ID);
         } catch (RuntimeException e) {
             verified = false;
         }
@@ -254,7 +261,7 @@ public final class WopClient {
             ContentDigest.Parsed digest;
             try {
                 digest = ContentDigest.parse(lower.get(HEADER_DIGEST), inboundSuite);
-            } catch (WopSdkException e) {
+            } catch (WopError e) {
                 return VerifyResult.fail(VerifyResult.Reason.INVALID_DIGEST_HEADER, e.getMessage());
             }
             if (!Codec.hexLower(inboundSuite.digest().digest(body)).equals(digest.hex())) {
@@ -277,7 +284,7 @@ public final class WopClient {
         DekPayload dek;
         try {
             dek = DekPayload.decode(new String(dekPlain, StandardCharsets.UTF_8));
-        } catch (WopSdkException e) {
+        } catch (WopError e) {
             return VerifyResult.fail(VerifyResult.Reason.INVALID_ENCRYPT_HEADER, "dek 载荷格式非法: " + e.getMessage());
         }
         if (!dek.alg().equals(inboundSuite.expectedDekAlg())) {
@@ -287,7 +294,7 @@ public final class WopClient {
         byte[] cipher;
         try {
             cipher = EncryptedEnvelope.cipherOf(body);
-        } catch (WopSdkException e) {
+        } catch (WopError e) {
             return VerifyResult.fail(VerifyResult.Reason.INVALID_ENCRYPTED_BODY, e.getMessage());
         }
         byte[] plain;
@@ -426,28 +433,28 @@ public final class WopClient {
             return this;
         }
 
-        /** 构造客户端：必填项与套件 fail-fast 校验，密钥按套件族即时解析（非法抛 {@link WopSdkException}）。 */
+        /** 构造客户端：必填项与套件 fail-fast 校验，密钥按套件族即时解析（非法抛 {@link WopError}，configuration 类）。 */
         public WopClient build() {
             if (appKey == null || appKey.trim().isEmpty()) {
-                throw new WopSdkException("appKey 为空");
+                throw WopError.configuration("appKey 为空");
             }
             if (suite == null || suite.trim().isEmpty()) {
-                throw new WopSdkException("suite（securityReq）为空");
+                throw WopError.configuration("suite（securityReq）为空");
             }
             if (expiredSeconds <= 0) {
-                throw new WopSdkException("expiredSeconds 须为正整数");
+                throw WopError.configuration("expiredSeconds 须为正整数");
             }
             AlgorithmSuite parsed;
             try {
                 parsed = AlgorithmSuite.parse(suite);
             } catch (WopSuiteException e) {
-                throw new WopSdkException(e.getMessage(), e);
+                throw WopError.configuration(e.getMessage(), e);
             }
             if (merchantPrivateKey == null || merchantPrivateKey.trim().isEmpty()) {
-                throw new WopSdkException("merchantPrivateKey 为空");
+                throw WopError.configuration("merchantPrivateKey 为空");
             }
             if (platformPublicKey == null || platformPublicKey.trim().isEmpty()) {
-                throw new WopSdkException("platformPublicKey 为空");
+                throw WopError.configuration("platformPublicKey 为空");
             }
             // fail-fast：密钥按套件族解析（D12 格式、长度一致性在 KeyCodec 内校验）
             return new WopClient(new Config(appKey, parsed, merchantPrivateKey, platformPublicKey, expiredSeconds),

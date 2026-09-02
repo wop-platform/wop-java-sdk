@@ -2,7 +2,9 @@ package com.wanlianyida.wop.crypto;
 
 import com.wanlianyida.wop.TestText;
 import com.wanlianyida.wop.VerifyResult;
+import com.wanlianyida.wop.WopError;
 import com.wanlianyida.wop.crypto.strategies.Aes256GcmStrategy;
+import com.wanlianyida.wop.crypto.strategies.Sm2SignatureStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sm2Support;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CoverageClose2Test {
 
     private static final AlgorithmSuite RSA = AlgorithmSuite.parse("WOP-RSA3072-SHA256");
+    private static final AlgorithmSuite SM2 = AlgorithmSuite.parse("WOP-SM2-SM3");
 
     @Test
     void isLowerHex64CharClassCombinations() {
@@ -62,10 +65,22 @@ class CoverageClose2Test {
     }
 
     @Test
+    void sm2SignWithNullUserIdRejected() {
+        // spec:D14：userId=null → 显式拒绝（无默认回退），sign/verify 双路径覆盖 withId null 分支
+        byte[] msg = Codec.utf8("x");
+        PrivateKey priv = KeyCodec.parsePrivateKey(
+                TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
+        PublicKey pub = KeyCodec.parsePublicKey(
+                TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
+        assertThrows(CryptoException.class, () -> Sm2SignatureStrategy.INSTANCE.sign(msg, priv, null));
+        assertThrows(CryptoException.class, () -> Sm2SignatureStrategy.INSTANCE.verify(msg, new byte[64], pub, null));
+    }
+
+    @Test
     void signHeaderMiddleEmptySegmentRejected() {
-        assertThrows(com.wanlianyida.wop.WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a;;b/c2ln"));
-        assertThrows(com.wanlianyida.wop.WopSdkException.class,
+        assertThrows(WopError.class,
                 () -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/;a/c2ln"));
     }
 
@@ -117,7 +132,8 @@ class CoverageClose2Test {
                 CanonicalRequest.canonicalHeaders(sub));
         headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800,
                 Arrays.asList("x-wop-nonce", "x-wop-timestamp"),
-                Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv))));
+                Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv,
+                        Codec.utf8("1234567812345678")))));
         VerifyResult result = client.verifyResponse(headers, null, "/p");
         assertTrue(result.ok(), () -> result.toString());
         assertNull(result.plaintext());
@@ -156,7 +172,8 @@ class CoverageClose2Test {
                 CanonicalRequest.canonicalHeaders(sub));
         headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800,
                 Arrays.asList("x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"),
-                Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv))));
+                Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv,
+                        Codec.utf8("1234567812345678")))));
 
         assertEquals(VerifyResult.Reason.INVALID_ENCRYPT_HEADER,
                 client.verifyResponse(headers, wire, "/p").reason());

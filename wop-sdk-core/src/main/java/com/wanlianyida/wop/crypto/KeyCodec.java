@@ -1,7 +1,6 @@
 package com.wanlianyida.wop.crypto;
 
-import com.wanlianyida.wop.WopSdkException;
-import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
+import com.wanlianyida.wop.WopError;
 import org.bouncycastle.crypto.params.ECNamedDomainParameters;
 import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
 import org.bouncycastle.crypto.params.ECPublicKeyParameters;
@@ -9,7 +8,6 @@ import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.crypto.util.SubjectPublicKeyInfoFactory;
 
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -26,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>SM2：公钥 = 未压缩点 04‖X‖Y 65B（Base64）或 SPKI；私钥 = d 32B 标量（Base64）或 PKCS#8；
  *       曲线守卫 sm2p256v1（I5）</li>
  * </ul>
- * 解析失败抛 {@link WopSdkException}（配置类错误，本地明确——鉴权前可判定，无 oracle 风险）。
+ * 解析失败抛 {@link WopError}（configuration 类错误，本地明确——鉴权前可判定，无 oracle 风险）。
  */
 public final class KeyCodec {
 
@@ -68,10 +66,10 @@ public final class KeyCodec {
             PublicKey key = ecFactory().generatePublic(new X509EncodedKeySpec(der));
             com.wanlianyida.wop.crypto.strategies.Sm2Support.toPublicParams(key);
             return key;
-        } catch (WopSdkException e) {
+        } catch (WopError e) {
             throw e;
         } catch (Exception e) {
-            throw new WopSdkException("公钥解析失败（" + suite.keyAlgorithm()
+            throw WopError.configuration("公钥解析失败（" + suite.keyAlgorithm()
                     + "，期望 SPKI 或 SM2 未压缩点 Base64）: " + e.getMessage(), e);
         }
     }
@@ -95,10 +93,10 @@ public final class KeyCodec {
             PrivateKey key = ecFactory().generatePrivate(new PKCS8EncodedKeySpec(der));
             com.wanlianyida.wop.crypto.strategies.Sm2Support.toPrivateParams(key);
             return key;
-        } catch (WopSdkException e) {
+        } catch (WopError e) {
             throw e;
         } catch (Exception e) {
-            throw new WopSdkException("私钥解析失败（" + suite.keyAlgorithm()
+            throw WopError.configuration("私钥解析失败（" + suite.keyAlgorithm()
                     + "，期望 PKCS#8 或 SM2 d 标量 Base64）: " + e.getMessage(), e);
         }
     }
@@ -107,7 +105,7 @@ public final class KeyCodec {
     private static void requireRsaLength(RSAKey key, AlgorithmSuite suite) {
         int bits = key.getModulus().bitLength();
         if (bits != suite.keyLength()) {
-            throw new WopSdkException("RSA 密钥长度 " + bits + " 与套件要求 " + suite.keyLength() + " 不符");
+            throw WopError.configuration("RSA 密钥长度 " + bits + " 与套件要求 " + suite.keyLength() + " 不符");
         }
     }
 
@@ -129,14 +127,14 @@ public final class KeyCodec {
         try {
             return Base64.getDecoder().decode(text);
         } catch (IllegalArgumentException e) {
-            throw new WopSdkException("密钥材料非合法 Base64: " + e.getMessage(), e);
+            throw WopError.configuration("密钥材料非合法 Base64: " + e.getMessage(), e);
         }
     }
 
     /** 入参非空守卫（空值抛配置类明确异常）。 */
     private static void requireText(String text, String kind) {
         if (text == null || text.trim().isEmpty()) {
-            throw new WopSdkException(kind + "为空");
+            throw WopError.configuration(kind + "为空");
         }
     }
 

@@ -79,7 +79,8 @@ class FaultInjectionTest {
             String canonical = CanonicalRequest.build("v1/1800", "POST", path, "",
                     CanonicalRequest.canonicalHeaders(sub));
             headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800, signed,
-                    Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv))));
+                    Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv,
+                            Codec.utf8("1234567812345678")))));
 
             headers.put("__wire__", Codec.b64UrlEncode(wire));   // 回传构造出的 wire 给测试
             return headers;
@@ -157,7 +158,8 @@ class FaultInjectionTest {
             String canonical = CanonicalRequest.build("v1/1800", "POST", "/p", "",
                     CanonicalRequest.canonicalHeaders(sub));
             headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800, signed,
-                    Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv))));
+                    Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv,
+                            Codec.utf8("1234567812345678")))));
 
             assertEquals(VerifyResult.Reason.DECRYPT_FAILED,
                     client.verifyResponse(headers, wire, "/p").reason());
