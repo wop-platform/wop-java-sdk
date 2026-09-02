@@ -18,7 +18,7 @@ Maven 多模块布局（`groupId: com.wanlianyida`，JDK 8+）：
 
 ## 2. 开发环境
 
-- JDK 8+（CI 矩阵 Temurin 8/21/25，见 `.github/workflows/ci.yml`；JaCoCo 覆盖率门禁只在 21 档执行）
+- JDK 8+（CI 矩阵 8/21/25——8 档 Zulu、21/25 档 Temurin（macOS aarch64 无 Temurin 8），见 `.github/workflows/ci.yml`；JaCoCo 覆盖率门禁只在 21 档执行）
 - Maven 3.9+（多模块构建；建议沿用 CI 的 `-B -ntp` 非交互模式）
 - 无需本地服务：测试自带向量 conformance 套件（Cucumber）与 MockWebServer（okhttp 模块）
 

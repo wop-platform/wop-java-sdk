@@ -18,13 +18,18 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         java: ['8', '21', '25']
+        include:
+          # Temurin 不发布 macOS aarch64 JDK 8（setup-java 报 No matching version
+          # found for SemVer '8'）；java 8 档改用 Zulu，21/25 档保持 Temurin
+          - java: '8'
+            distribution: zulu
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v6
         with:
-          distribution: temurin
+          distribution: ${{ matrix.distribution || 'temurin' }}
           java-version: ${{ matrix.java }}
           cache: maven
       - name: Build, test and enforce coverage gate (line+branch = 100%)
