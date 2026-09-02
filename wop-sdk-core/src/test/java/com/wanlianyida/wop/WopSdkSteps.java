@@ -110,8 +110,8 @@ public class WopSdkSteps {
 
     @当("使用 SM2-SM3 套件构建 L2 请求 body 为 业务报文")
     public void buildL2Sm2() {
-        var sm2Priv = TestVectors.keys("sm2").path("privateDB64").asText();
-        var sm2Pub = TestVectors.keys("sm2").path("publicPointB64").asText();
+        String sm2Priv = TestVectors.keys("sm2").path("privateDB64").asText();
+        String sm2Pub = TestVectors.keys("sm2").path("publicPointB64").asText();
         client = randomClient("WOP-SM2-SM3", sm2Priv, sm2Pub);
         draft = client.buildRequest("POST", SYNC_PATH, BODY, SecurityLevel.L2);
     }
@@ -134,7 +134,7 @@ public class WopSdkSteps {
     @那么("签名头包含 appkey、timestamp、nonce")
     public void signedContainsBase() {
         SignHeader.Parsed parsed = SignHeader.parse(draft.headers().get("x-wop-sign"));
-        assertTrue(parsed.signedHeaders().containsAll(List.of("x-wop-appkey", "x-wop-timestamp", "x-wop-nonce")));
+        assertTrue(parsed.signedHeaders().containsAll(Arrays.asList("x-wop-appkey", "x-wop-timestamp", "x-wop-nonce")));
     }
 
     @那么("请求含 x-wop-content-digest 头且为 {string}")
@@ -171,7 +171,7 @@ public class WopSdkSteps {
     @那么("签名头包含 x-wop-encrypt 与 x-wop-content-digest")
     public void signedContainsEncryptAndDigest() {
         SignHeader.Parsed parsed = SignHeader.parse(draft.headers().get("x-wop-sign"));
-        assertTrue(parsed.signedHeaders().containsAll(List.of("x-wop-encrypt", "x-wop-content-digest")));
+        assertTrue(parsed.signedHeaders().containsAll(Arrays.asList("x-wop-encrypt", "x-wop-content-digest")));
     }
 
     @那么("digest 是对密文 wireBody 的摘要（非明文）")
@@ -204,22 +204,22 @@ public class WopSdkSteps {
 
     @当("平台返回 L0 响应 响应报文")
     public void platformL0Response() {
-        var rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
-        var resp = rig.respond(PATH, RESPONSE, false);
+        PlatformRig rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
+        PlatformResponse resp = rig.respond(PATH, RESPONSE, false);
         verify = client.verifyResponse(resp.headers(), resp.wire(), PATH);
     }
 
     @当("平台返回 L2 响应 响应报文")
     public void platformL2Response() {
-        var rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
-        var resp = rig.respond(PATH, RESPONSE, true);
+        PlatformRig rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
+        PlatformResponse resp = rig.respond(PATH, RESPONSE, true);
         verify = client.verifyResponse(resp.headers(), resp.wire(), PATH);
     }
 
     @当("平台返回 L0 响应 响应报文 但签名被篡改")
     public void platformTamperedResponse() {
-        var rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
-        var resp = rig.respond(PATH, RESPONSE, false);
+        PlatformRig rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
+        PlatformResponse resp = rig.respond(PATH, RESPONSE, false);
         String sig = resp.headers().get("x-wop-sign");
         char[] cs = sig.toCharArray();
         int pos = cs.length - 10;
@@ -230,23 +230,23 @@ public class WopSdkSteps {
 
     @当("^平台回调 POST /callback/waybill-status 带 L2 报文$")
     public void platformCallback() {
-        var rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
-        var resp = rig.respond("/callback/waybill-status", RESPONSE, true);
+        PlatformRig rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
+        PlatformResponse resp = rig.respond("/callback/waybill-status", RESPONSE, true);
         verify = client.verifyCallback(resp.headers(), resp.wire(), "/callback/waybill-status");
     }
 
     @当("平台返回 L0 响应 响应报文 但 digest 头缺席")
     public void platformNoDigest() {
-        var rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
-        var resp = rig.respond(PATH, RESPONSE, false);
+        PlatformRig rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
+        PlatformResponse resp = rig.respond(PATH, RESPONSE, false);
         resp.headers().remove("x-wop-content-digest");
         verify = client.verifyResponse(resp.headers(), resp.wire(), PATH);
     }
 
     @当("平台返回无 body 的 L0 响应 但带 digest 头")
     public void platformDigestWithoutBody() {
-        var rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
-        var resp = rig.respond(PATH, new byte[0], false);
+        PlatformRig rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
+        PlatformResponse resp = rig.respond(PATH, new byte[0], false);
         Map<String, String> h = new LinkedHashMap<>(resp.headers());
         h.put("x-wop-content-digest", "sha-256 " + Codec.hexLower(
                 AlgorithmSuite.parse("WOP-RSA3072-SHA256").digest().digest(RESPONSE)));
@@ -255,9 +255,9 @@ public class WopSdkSteps {
 
     @当("平台返回 L0 响应 响应报文 但 digest 值错误")
     public void platformWrongDigest() {
-        var rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
-        var resp = rig.respond(PATH, RESPONSE, false);
-        resp.headers().put("x-wop-content-digest", "sha-256 " + "0".repeat(64));
+        PlatformRig rig = new PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
+        PlatformResponse resp = rig.respond(PATH, RESPONSE, false);
+        resp.headers().put("x-wop-content-digest", "sha-256 " + TestText.repeat("0", 64));
         verify = client.verifyResponse(resp.headers(), resp.wire(), PATH);
     }
 
@@ -442,7 +442,17 @@ public class WopSdkSteps {
     }
 
     /** 平台响应装配（模拟网关侧：平台私钥签名 + L2 信封）。 */
-    private record PlatformRig(String securityReq, String platformPrivB64, String merchantPubB64) {
+    private static final class PlatformRig {
+        private final String securityReq;
+        private final String platformPrivB64;
+        private final String merchantPubB64;
+
+        PlatformRig(String securityReq, String platformPrivB64, String merchantPubB64) {
+            this.securityReq = securityReq;
+            this.platformPrivB64 = platformPrivB64;
+            this.merchantPubB64 = merchantPubB64;
+        }
+
         PlatformResponse respond(String path, byte[] plain, boolean l2) {
             AlgorithmSuite suite = AlgorithmSuite.parse(securityReq);
             PrivateKey platformPriv = KeyCodec.parsePrivateKey(platformPrivB64, suite);
@@ -480,6 +490,22 @@ public class WopSdkSteps {
         }
     }
 
-    private record PlatformResponse(Map<String, String> headers, byte[] wire) {
+    private static final class PlatformResponse {
+
+        private final Map<String, String> headers;
+        private final byte[] wire;
+
+        PlatformResponse(Map<String, String> headers, byte[] wire) {
+            this.headers = headers;
+            this.wire = wire;
+        }
+
+        Map<String, String> headers() {
+            return headers;
+        }
+
+        byte[] wire() {
+            return wire;
+        }
     }
 }

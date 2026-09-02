@@ -4,6 +4,7 @@ import com.wanlianyida.wop.RequestDraft;
 import com.wanlianyida.wop.TransportResponse;
 import com.wanlianyida.wop.WopSdkException;
 import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.RecordedRequest;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.SocketPolicy;
 import org.junit.jupiter.api.AfterEach;
@@ -24,6 +25,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * OkHttp 适配器：MockWebServer 覆盖请求映射/响应映射/错误传播。
  */
 class OkHttpTransportTest {
+
+    /** Java 8 无 Map.of：成对参数构造小请求头。 */
+    private static java.util.Map<String, String> headers(String... kv) {
+        java.util.Map<String, String> map = new java.util.LinkedHashMap<String, String>();
+        for (int i = 0; i < kv.length; i += 2) {
+            map.put(kv[i], kv[i + 1]);
+        }
+        return map;
+    }
 
     private final MockWebServer server = new MockWebServer();
 
@@ -54,7 +64,7 @@ class OkHttpTransportTest {
         assertEquals("{\"ok\":true}", new String(response.body(), StandardCharsets.UTF_8));
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("x-wop-sign"));
 
-        var recorded = server.takeRequest();
+        RecordedRequest recorded = server.takeRequest();
         assertEquals("POST", recorded.getMethod());
         assertEquals("/gateway/x", recorded.getPath());
         assertEquals("app_001", recorded.getHeader("x-wop-appkey"));
@@ -68,11 +78,11 @@ class OkHttpTransportTest {
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString().replaceAll("/$", ""));
 
         TransportResponse response = transport.send(
-                new RequestDraft("GET", "/p", Map.of("x-wop-appkey", "a"), null));
+                new RequestDraft("GET", "/p", headers("x-wop-appkey", "a"), null));
         assertEquals(204, response.statusCode());
         assertEquals(0, response.body().length);
 
-        var recorded = server.takeRequest();
+        RecordedRequest recorded = server.takeRequest();
         assertEquals("GET", recorded.getMethod());
         assertEquals(0, recorded.getBodySize());
     }
@@ -83,7 +93,7 @@ class OkHttpTransportTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport("http://invalid.example");
         TransportResponse response = transport.send(
-                new RequestDraft("POST", server.url("/abs").toString(), Map.of(), new byte[]{1}));
+                new RequestDraft("POST", server.url("/abs").toString(), headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals("/abs", server.takeRequest().getPath());
     }
@@ -92,7 +102,7 @@ class OkHttpTransportTest {
     void relativePathWithoutBaseUrlRejected() {
         OkHttpTransport transport = new OkHttpTransport((String) null);
         WopSdkException ex = assertThrows(WopSdkException.class,
-                () -> transport.send(new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                () -> transport.send(new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("baseUrl"));
     }
 
@@ -102,7 +112,7 @@ class OkHttpTransportTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         assertThrows(WopSdkException.class,
-                () -> transport.send(new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                () -> transport.send(new RequestDraft("POST", "/p", headers(), new byte[]{1})));
     }
 
     @Test
@@ -111,7 +121,7 @@ class OkHttpTransportTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertNull(response.headers().get("x-wop-sign"));
         assertEquals(0, response.body().length);
@@ -124,14 +134,14 @@ class OkHttpTransportTest {
         // 尾斜杠 baseUrl + 无斜杠相对 path
         OkHttpTransport trailing = new OkHttpTransport(server.url("/sub/").toString());
         TransportResponse response = trailing.send(
-                new RequestDraft("POST", "gateway/x", Map.of("x-wop-appkey", "a"), new byte[]{1}));
+                new RequestDraft("POST", "gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals("/sub/gateway/x", server.takeRequest().getPath());
 
         // 无参构造（无 baseUrl）+ 相对 path → 明确拒绝
         OkHttpTransport noArg = new OkHttpTransport();
         assertThrows(WopSdkException.class, () -> noArg.send(
-                new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
     }
 
     @Test
@@ -140,7 +150,7 @@ class OkHttpTransportTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("HEAD", "/p", Map.of("x-wop-appkey", "a"), null));
+                new RequestDraft("HEAD", "/p", headers("x-wop-appkey", "a"), null));
         assertEquals(200, response.statusCode());
         assertEquals("HEAD", server.takeRequest().getMethod());
     }
@@ -149,7 +159,7 @@ class OkHttpTransportTest {
     void blankBaseUrlTreatedAsAbsent() {
         OkHttpTransport blank = new OkHttpTransport("   ");
         assertThrows(WopSdkException.class, () -> blank.send(
-                new RequestDraft("POST", "/rel", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
     }
 
     // spec:max-response-bytes —— 11MB 上限边界：超 1 字节拒 / 恰好上限过（两条路径：Content-Length 预检 + 流式计数）
@@ -161,7 +171,7 @@ class OkHttpTransportTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("上限"));
     }
 
@@ -174,7 +184,7 @@ class OkHttpTransportTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("上限"));
     }
 
@@ -187,7 +197,7 @@ class OkHttpTransportTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals(OkHttpTransport.MAX_RESPONSE_BYTES, response.body().length);
         assertArrayEquals(exact, response.body());

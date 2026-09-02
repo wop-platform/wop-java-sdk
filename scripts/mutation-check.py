@@ -43,8 +43,8 @@ MUTATIONS = [
      "hexLower 高半字节偏移", "MATH"),
     # --- 逻辑取反（PIT: NEGATE_CONDITIONALS / REMOVE_CONDITIONALS）---
     ("src/main/java/com/wanlianyida/wop/WopClient.java",
-     "if (hasBody && (lower.get(HEADER_DIGEST) == null || lower.get(HEADER_DIGEST).isBlank()))",
-     "if (hasBody || (lower.get(HEADER_DIGEST) == null || lower.get(HEADER_DIGEST).isBlank()))",
+     "if (hasBody && (lower.get(HEADER_DIGEST) == null || lower.get(HEADER_DIGEST).trim().isEmpty()))",
+     "if (hasBody || (lower.get(HEADER_DIGEST) == null || lower.get(HEADER_DIGEST).trim().isEmpty()))",
      "verifyInbound digest 缺失判定 && → ||", "NEGATE_CONDITIONALS"),
     ("src/main/java/com/wanlianyida/wop/crypto/Codec.java",
      "return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';",
@@ -110,7 +110,7 @@ def main():
         print(f"[{i:2d}] {cat:26s} {status:22s} {desc}")
         if note:
             print(f"      {note[:200]}")
-    killed = sum(1 for r in results if r[2] == "KILLED")
+    killed = sum(r[2] == "KILLED" for r in results)
     total = len(results)
     print(f"\n=== 变异击杀率: {killed}/{total} = {killed/total*100:.1f}% ===")
     surv = [r for r in results if r[2] != "KILLED"]

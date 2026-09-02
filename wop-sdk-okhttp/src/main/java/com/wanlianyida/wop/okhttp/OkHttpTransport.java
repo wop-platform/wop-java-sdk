@@ -99,7 +99,7 @@ public final class OkHttpTransport implements Transport {
     }
 
     private static String trimBaseUrl(String baseUrl) {
-        if (baseUrl == null || baseUrl.isBlank()) {
+        if (baseUrl == null || baseUrl.trim().isEmpty()) {
             return null;
         }
         return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;

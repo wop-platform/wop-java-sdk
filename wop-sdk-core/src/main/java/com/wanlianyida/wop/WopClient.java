@@ -16,9 +16,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -82,10 +85,10 @@ public final class WopClient {
      * @param level  L0 明文 / L2 数字信封（L2 需要非空 body）
      */
     public RequestDraft buildRequest(String method, String path, byte[] body, SecurityLevel level) {
-        if (method == null || method.isBlank()) {
+        if (method == null || method.trim().isEmpty()) {
             throw new WopSdkException("HTTP method 为空");
         }
-        if (path == null || path.isBlank()) {
+        if (path == null || path.trim().isEmpty()) {
             throw new WopSdkException("请求路径为空");
         }
         if (level == null) {
@@ -131,7 +134,7 @@ public final class WopClient {
             // headers 白名单恒为签名头（appkey/timestamp/nonce[/digest][/encrypt]），全部参与签名
             signedNames.add(name);
         }
-        List<String> signedHeaders = List.copyOf(signedNames);
+        List<String> signedHeaders = Collections.unmodifiableList(new ArrayList<>(signedNames));
         String authString = SignHeader.PROTOCOL_VERSION + "/" + config.expiredSeconds();
         String canonical = CanonicalRequest.build(authString, upperMethod, path, "",
                 CanonicalRequest.canonicalHeaders(subMap(headers, signedHeaders)));
@@ -165,7 +168,7 @@ public final class WopClient {
 
         // 1. 签名头存在性与格式（解析类，明确）
         String signHeader = lower.get(HEADER_SIGN);
-        if (signHeader == null || signHeader.isBlank()) {
+        if (signHeader == null || signHeader.trim().isEmpty()) {
             return VerifyResult.fail(VerifyResult.Reason.MISSING_SIGN_HEADER, null);
         }
         SignHeader.Parsed sign;
@@ -197,7 +200,7 @@ public final class WopClient {
 
         // 4. D2/I1 前置：有 body → digest 头必在且必入签；L2 → x-wop-encrypt 必入签
         boolean hasBody = body != null && body.length > 0;
-        if (hasBody && (lower.get(HEADER_DIGEST) == null || lower.get(HEADER_DIGEST).isBlank())) {
+        if (hasBody && (lower.get(HEADER_DIGEST) == null || lower.get(HEADER_DIGEST).trim().isEmpty())) {
             return VerifyResult.fail(VerifyResult.Reason.MISSING_DIGEST_HEADER, null);
         }
         if (hasBody && !sign.signedHeaders().contains(HEADER_DIGEST)) {
@@ -298,8 +301,72 @@ public final class WopClient {
 
     // ==================== 配置 ====================
 
-    record Config(String appKey, AlgorithmSuite suite, String merchantPrivateKey,
-                  String platformPublicKey, long expiredSeconds) {
+    /** 客户端配置（不可变，record 等价值语义：equals/hashCode 按全部字段）。 */
+    static final class Config {
+
+        private final String appKey;
+        private final AlgorithmSuite suite;
+        private final String merchantPrivateKey;
+        private final String platformPublicKey;
+        private final long expiredSeconds;
+
+        Config(String appKey, AlgorithmSuite suite, String merchantPrivateKey,
+               String platformPublicKey, long expiredSeconds) {
+            this.appKey = appKey;
+            this.suite = suite;
+            this.merchantPrivateKey = merchantPrivateKey;
+            this.platformPublicKey = platformPublicKey;
+            this.expiredSeconds = expiredSeconds;
+        }
+
+        String appKey() {
+            return appKey;
+        }
+
+        AlgorithmSuite suite() {
+            return suite;
+        }
+
+        String merchantPrivateKey() {
+            return merchantPrivateKey;
+        }
+
+        String platformPublicKey() {
+            return platformPublicKey;
+        }
+
+        long expiredSeconds() {
+            return expiredSeconds;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof Config)) {
+                return false;
+            }
+            Config that = (Config) o;
+            return expiredSeconds == that.expiredSeconds
+                    && Objects.equals(appKey, that.appKey)
+                    && Objects.equals(suite, that.suite)
+                    && Objects.equals(merchantPrivateKey, that.merchantPrivateKey)
+                    && Objects.equals(platformPublicKey, that.platformPublicKey);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(appKey, suite, merchantPrivateKey, platformPublicKey, expiredSeconds);
+        }
+
+        @Override
+        public String toString() {
+            return "Config[appKey=" + appKey + ", suite=" + suite
+                    + ", merchantPrivateKey=" + merchantPrivateKey
+                    + ", platformPublicKey=" + platformPublicKey
+                    + ", expiredSeconds=" + expiredSeconds + "]";
+        }
     }
 
     /** 按签名头清单取子集（保持清单顺序，供 canonicalHeaders 编码）。 */
@@ -361,10 +428,10 @@ public final class WopClient {
 
         /** 构造客户端：必填项与套件 fail-fast 校验，密钥按套件族即时解析（非法抛 {@link WopSdkException}）。 */
         public WopClient build() {
-            if (appKey == null || appKey.isBlank()) {
+            if (appKey == null || appKey.trim().isEmpty()) {
                 throw new WopSdkException("appKey 为空");
             }
-            if (suite == null || suite.isBlank()) {
+            if (suite == null || suite.trim().isEmpty()) {
                 throw new WopSdkException("suite（securityReq）为空");
             }
             if (expiredSeconds <= 0) {
@@ -376,10 +443,10 @@ public final class WopClient {
             } catch (WopSuiteException e) {
                 throw new WopSdkException(e.getMessage(), e);
             }
-            if (merchantPrivateKey == null || merchantPrivateKey.isBlank()) {
+            if (merchantPrivateKey == null || merchantPrivateKey.trim().isEmpty()) {
                 throw new WopSdkException("merchantPrivateKey 为空");
             }
-            if (platformPublicKey == null || platformPublicKey.isBlank()) {
+            if (platformPublicKey == null || platformPublicKey.trim().isEmpty()) {
                 throw new WopSdkException("platformPublicKey 为空");
             }
             // fail-fast：密钥按套件族解析（D12 格式、长度一致性在 KeyCodec 内校验）

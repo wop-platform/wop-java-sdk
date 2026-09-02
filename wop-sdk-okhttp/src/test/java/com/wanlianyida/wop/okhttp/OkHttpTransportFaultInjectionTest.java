@@ -24,6 +24,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class OkHttpTransportFaultInjectionTest {
 
+    /** Java 8 无 Map.of：成对参数构造小请求头。 */
+    private static java.util.Map<String, String> headers(String... kv) {
+        java.util.Map<String, String> map = new java.util.LinkedHashMap<String, String>();
+        for (int i = 0; i < kv.length; i += 2) {
+            map.put(kv[i], kv[i + 1]);
+        }
+        return map;
+    }
+
     private final MockWebServer server = new MockWebServer();
 
     @AfterEach
@@ -45,7 +54,7 @@ class OkHttpTransportFaultInjectionTest {
         OkHttpTransport transport = unroutableClient();
         long start = System.nanoTime();
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("OkHttp"));
         assertTrue(ex.getCause() instanceof java.net.SocketTimeoutException);
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
@@ -62,7 +71,7 @@ class OkHttpTransportFaultInjectionTest {
                 .build();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString(), fast);
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getCause() instanceof java.net.SocketTimeoutException);
     }
 
@@ -73,7 +82,7 @@ class OkHttpTransportFaultInjectionTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
     }
 
     @Test
@@ -89,7 +98,7 @@ class OkHttpTransportFaultInjectionTest {
         OkHttpTransport transport = new OkHttpTransport(
                 server.url("/").toString().replace("http://", "https://"), noRetry);
         assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
     }
 
     @Test
@@ -99,7 +108,7 @@ class OkHttpTransportFaultInjectionTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(502, response.statusCode());
         assertTrue(new String(response.body(), java.nio.charset.StandardCharsets.UTF_8)
                 .contains("OP_GW_5001"));
@@ -114,7 +123,7 @@ class OkHttpTransportFaultInjectionTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("x-wop-sign"));
         assertEquals("N1", response.headers().get("x-wop-nonce"));
         // 大小写不敏感视图：任意形态查询命中同一值

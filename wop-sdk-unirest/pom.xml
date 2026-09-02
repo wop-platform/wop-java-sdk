@@ -36,4 +36,9 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <!-- unirest-java-core 4.x 为 class major 55（Java 11+），JDK 8 javac 无法读取其
+       class 文件（-release 8 只约束产物字节码，不解决依赖版本），CI 的 JDK 8 档以
+       -pl '!wop-sdk-unirest' 排除本模块（见 .github/workflows/ci.yml 与
+       CONTRIBUTING.md）；JDK 8 用户请改用 okhttp/jdkhttp 适配器（见 README 模块表）。 -->
 </project>

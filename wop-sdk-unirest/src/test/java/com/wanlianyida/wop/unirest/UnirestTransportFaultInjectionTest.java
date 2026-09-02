@@ -27,7 +27,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -45,6 +44,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class UnirestTransportFaultInjectionTest {
 
+    /** Java 8 无 Map.of：成对参数构造小请求头。 */
+    private static java.util.Map<String, String> headers(String... kv) {
+        java.util.Map<String, String> map = new java.util.LinkedHashMap<String, String>();
+        for (int i = 0; i < kv.length; i += 2) {
+            map.put(kv[i], kv[i + 1]);
+        }
+        return map;
+    }
+
     private final MockWebServer server = new MockWebServer();
 
     @AfterEach
@@ -60,7 +68,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = new UnirestTransport(server.url("/").toString(),
                 new UnirestInstance(new Config().connectTimeout(2_000).requestTimeout(500)));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("Unirest"));
     }
 
@@ -73,7 +81,7 @@ class UnirestTransportFaultInjectionTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
     }
 
     @Test
@@ -82,7 +90,7 @@ class UnirestTransportFaultInjectionTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(500, response.statusCode());
         assertEquals("boom", new String(response.body(), StandardCharsets.UTF_8));
     }
@@ -94,7 +102,7 @@ class UnirestTransportFaultInjectionTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("x-wop-sign"));
     }
 
@@ -104,7 +112,7 @@ class UnirestTransportFaultInjectionTest {
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString());
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(204, response.statusCode());
         assertEquals(0, response.body().length);
     }
@@ -126,7 +134,7 @@ class UnirestTransportFaultInjectionTest {
             UnirestTransport transport = new UnirestTransport(
                     "http://127.0.0.1:" + resetServer.getAddress().getPort());
             assertThrows(WopSdkException.class, () -> transport.send(
-                    new RequestDraft("POST", "/cut", Map.of(), new byte[]{1})));
+                    new RequestDraft("POST", "/cut", headers(), new byte[]{1})));
         } finally {
             resetServer.stop(0);
         }
@@ -158,7 +166,7 @@ class UnirestTransportFaultInjectionTest {
             UnirestTransport transport = new UnirestTransport(
                     "http://127.0.0.1:" + listener.getLocalPort());
             assertThrows(WopSdkException.class, () -> transport.send(
-                    new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                    new RequestDraft("POST", "/p", headers(), new byte[]{1})));
             killer.join(5_000);
         }
     }
@@ -171,7 +179,7 @@ class UnirestTransportFaultInjectionTest {
         };
         UnirestTransport transport = injectedTransport(body);
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("Unirest 传输失败"), ex.getMessage());
     }
 
@@ -184,7 +192,7 @@ class UnirestTransportFaultInjectionTest {
         };
         UnirestTransport transport = injectedTransport(body);
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals(0, response.body().length);
     }
@@ -194,7 +202,7 @@ class UnirestTransportFaultInjectionTest {
         // 边界：getContent() 返回 null（无实体语义）→ 空 body 交付
         UnirestTransport transport = injectedTransport((InputStream) null);
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals(0, response.body().length);
     }
@@ -207,7 +215,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[10]), headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("截断"), ex.getMessage());
     }
 
@@ -218,7 +226,7 @@ class UnirestTransportFaultInjectionTest {
         headers.add("Content-Length", "100");
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[0]), headers));
-        TransportResponse response = transport.send(new RequestDraft("HEAD", "/p", Map.of(), null));
+        TransportResponse response = transport.send(new RequestDraft("HEAD", "/p", headers(), null));
         assertEquals(200, response.statusCode());
         assertEquals(0, response.body().length);
     }
@@ -230,7 +238,7 @@ class UnirestTransportFaultInjectionTest {
         headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES * 2));
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[0]), headers));
-        TransportResponse response = transport.send(new RequestDraft("HEAD", "/big", Map.of(), null));
+        TransportResponse response = transport.send(new RequestDraft("HEAD", "/big", headers(), null));
         assertEquals(200, response.statusCode());
         assertEquals(0, response.body().length);
     }
@@ -244,7 +252,7 @@ class UnirestTransportFaultInjectionTest {
             UnirestTransport transport = injectedTransport(rawResponseWithBody(
                     new ByteArrayInputStream(new byte[0]), headers, status));
             TransportResponse response = transport.send(
-                    new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                    new RequestDraft("POST", "/p", headers(), new byte[]{1}));
             assertEquals(status, response.statusCode(), "status=" + status);
             assertEquals(0, response.body().length);
         }
@@ -258,7 +266,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[2]), headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
     }
 
@@ -269,7 +277,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[0]), headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
     }
 
@@ -281,7 +289,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[10]), headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("上限"), ex.getMessage());
     }
 
@@ -291,7 +299,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[UnirestTransport.MAX_RESPONSE_BYTES + 1]), new Headers()));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("响应体超过"), ex.getMessage());
     }
 
@@ -304,7 +312,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[100]), headers));
         TransportResponse response = transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1}));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals(100, response.body().length);
     }
@@ -318,7 +326,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[10]), headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("不一致"), ex.getMessage());
     }
 
@@ -330,7 +338,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[5]), headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
     }
 
@@ -342,7 +350,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[5]), headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
     }
 
@@ -354,7 +362,7 @@ class UnirestTransportFaultInjectionTest {
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[5]), headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
     }
 
@@ -370,7 +378,7 @@ class UnirestTransportFaultInjectionTest {
         };
         UnirestTransport transport = injectedTransport(rawResponseWithBody(counting, headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("上限"), ex.getMessage());
         assertEquals(0, reads.get(), "先验拒绝不应读取响应体");
     }
@@ -385,7 +393,7 @@ class UnirestTransportFaultInjectionTest {
         };
         UnirestTransport transport = injectedTransport(rawResponseWithBody(failingClose, headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("上限"), ex.getMessage());
     }
 
@@ -396,7 +404,7 @@ class UnirestTransportFaultInjectionTest {
         headers.add("Content-Length", "12ab");
         UnirestTransport transport = injectedTransport(rawResponseWithBody(null, headers));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
-                new RequestDraft("POST", "/p", Map.of(), new byte[]{1})));
+                new RequestDraft("POST", "/p", headers(), new byte[]{1})));
         assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
     }
 
@@ -430,30 +438,42 @@ class UnirestTransportFaultInjectionTest {
         };
     }
 
-    /** 以产出指定响应的伪 Client 构造 Transport（无网络，异常路径全确定性）。 */
+    /** 以产出指定响应的伪 Client 构造 Transport（无网络，异常路径全确定性）。
+     * Client.websocket 签名引用 java.net.http.WebSocket.Listener（JDK 11+ 类型），
+     * Java 8 源级无法显式实现该接口 → 反射动态代理，编译期不触碰该签名；
+     * Unirest 4.x 本身要求 Java 11+ 运行时（jar 字节码 major 55），本桩仅在 11+ 测试档执行。 */
+    @SuppressWarnings("unchecked")
     private static UnirestTransport injectedTransport(RawResponse response) {
-        Client fakeClient = new Client() {
-            @Override public <T> T getClient() { return null; }
-            @Override public <T> HttpResponse<T> request(HttpRequest request,
-                    Function<RawResponse, HttpResponse<T>> transformer, Class<?> resultType) {
-                return transformer.apply(response);
-            }
-            @Override public <T> CompletableFuture<HttpResponse<T>> request(HttpRequest request,
-                    Function<RawResponse, HttpResponse<T>> transformer,
-                    CompletableFuture<HttpResponse<T>> callback, Class<?> resultType) {
-                callback.complete(request(request, transformer, resultType));
-                return callback;
-            }
-            @Override public WebSocketResponse websocket(WebSocketRequest request, WebSocket.Listener listener) {
-                throw new UnsupportedOperationException();
-            }
-            @Override public CompletableFuture<Void> sse(SseRequest request, SseHandler handler) {
-                throw new UnsupportedOperationException();
-            }
-            @Override public Stream<Event> sse(SseRequest request) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        Client fakeClient = (Client) java.lang.reflect.Proxy.newProxyInstance(
+                Client.class.getClassLoader(), new Class<?>[]{Client.class},
+                (proxy, method, args) -> {
+                    if ("hashCode".equals(method.getName())) {
+                        return System.identityHashCode(proxy);
+                    }
+                    if ("equals".equals(method.getName())) {
+                        return proxy == args[0];
+                    }
+                    if ("toString".equals(method.getName())) {
+                        return "fakeClient";
+                    }
+                    if ("getClient".equals(method.getName())) {
+                        return null;
+                    }
+                    if ("request".equals(method.getName()) && method.getParameterCount() == 3) {
+                        Function<RawResponse, HttpResponse<Object>> transformer =
+                                (Function<RawResponse, HttpResponse<Object>>) args[1];
+                        return transformer.apply(response);
+                    }
+                    if ("request".equals(method.getName()) && method.getParameterCount() == 4) {
+                        Function<RawResponse, HttpResponse<Object>> transformer =
+                                (Function<RawResponse, HttpResponse<Object>>) args[1];
+                        CompletableFuture<HttpResponse<Object>> callback =
+                                (CompletableFuture<HttpResponse<Object>>) args[2];
+                        callback.complete(transformer.apply(response));
+                        return callback;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
         return new UnirestTransport("http://127.0.0.1:1/",
                 new UnirestInstance(new Config().httpClient(fakeClient)));
     }

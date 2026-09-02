@@ -3,6 +3,7 @@ package com.wanlianyida.wop.crypto;
 import com.wanlianyida.wop.crypto.strategies.RsaPkcs1SignatureStrategy;
 import com.wanlianyida.wop.crypto.strategies.SignatureStrategy;
 import com.wanlianyida.wop.crypto.strategies.Sm2SignatureStrategy;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -33,7 +34,7 @@ class SignatureStrategyVectorTest {
 
     @Test
     void rsa3072SignMatchesGoldenVector() {
-        var vector = TestVectors.firstById("signature", "rsa3072-sign");
+        JsonNode vector = TestVectors.firstById("signature", "rsa3072-sign");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA3072);
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072);
@@ -48,7 +49,7 @@ class SignatureStrategyVectorTest {
 
     @Test
     void rsa4096SignMatchesGoldenVector() {
-        var vector = TestVectors.firstById("signature", "rsa4096-sign");
+        JsonNode vector = TestVectors.firstById("signature", "rsa4096-sign");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa4096").path("privatePkcs8B64").asText(), RSA4096);
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("rsa4096").path("publicSpkiB64").asText(), RSA4096);
@@ -62,7 +63,7 @@ class SignatureStrategyVectorTest {
 
     @Test
     void rsaTamperedSignatureRejected() {
-        var vector = TestVectors.firstById("signature", "rsa3072-sign");
+        JsonNode vector = TestVectors.firstById("signature", "rsa3072-sign");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072);
         byte[] sig = Codec.b64UrlDecode(vector.path("expectedSigB64u").asText());
@@ -77,7 +78,7 @@ class SignatureStrategyVectorTest {
     void rsaVerifyLengthMismatchThrowsWrapped() {
         // A2 负向量：签名长度 != 模长（SunRsaSign engineVerify 前置守卫抛 SignatureException）
         // → 策略包装为 CryptoException（I7：调用方只见统一模糊异常）
-        var vector = TestVectors.firstById("signature", "rsa3072-sign");
+        JsonNode vector = TestVectors.firstById("signature", "rsa3072-sign");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072);
         byte[] shortSig = new byte[64];
@@ -88,7 +89,7 @@ class SignatureStrategyVectorTest {
 
     @Test
     void sm2FixedKSignMatchesGoldenVector() {
-        var vector = TestVectors.firstById("signature", "sm2-sign-fixedk");
+        JsonNode vector = TestVectors.firstById("signature", "sm2-sign-fixedk");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
@@ -113,7 +114,7 @@ class SignatureStrategyVectorTest {
     @Test
     void sm2LengthViolationsRejected() {
         // A2 负向量：63B / 65B / DER 编码签名一律 false（定长前置校验，spec §3.3①）
-        var vector = TestVectors.firstById("signature", "sm2-sign-fixedk");
+        JsonNode vector = TestVectors.firstById("signature", "sm2-sign-fixedk");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
         byte[] sig = Codec.b64UrlDecode(vector.path("expectedSigB64u").asText());
@@ -128,7 +129,7 @@ class SignatureStrategyVectorTest {
 
     @Test
     void sm2TamperedSignatureRejected() {
-        var vector = TestVectors.firstById("signature", "sm2-sign-fixedk");
+        JsonNode vector = TestVectors.firstById("signature", "sm2-sign-fixedk");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
         byte[] sig = Codec.b64UrlDecode(vector.path("expectedSigB64u").asText());
@@ -139,7 +140,7 @@ class SignatureStrategyVectorTest {
     @Test
     void crossFamilySignatureRejected() {
         // A2 负向量：SM2 套件验 RSA 384B 签名（长度即拒）；RSA 套件配 SM2 密钥在 KeyCodec 已拒
-        var vector = TestVectors.firstById("signature", "rsa3072-sign");
+        JsonNode vector = TestVectors.firstById("signature", "rsa3072-sign");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PublicKey sm2Pub = KeyCodec.parsePublicKey(TestVectors.keys("sm2").path("publicPointB64").asText(), SM2);
         byte[] rsaSig = Codec.b64UrlDecode(vector.path("expectedSigB64u").asText());
@@ -155,7 +156,7 @@ class SignatureStrategyVectorTest {
     @Test
     void sm2SignDeterministicParts() {
         // 参考实现 r/s 各 32B 大端（不足左补零路径）
-        var vector = TestVectors.firstById("signature", "sm2-sign-fixedk");
+        JsonNode vector = TestVectors.firstById("signature", "sm2-sign-fixedk");
         byte[] msg = Codec.utf8(vector.path("message").asText());
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
         BigInteger k = new BigInteger(1, Codec.b64UrlDecode(TestVectors.input("sm2FixedKB64u")));

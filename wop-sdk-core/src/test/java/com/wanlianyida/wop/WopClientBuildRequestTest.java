@@ -90,7 +90,7 @@ class WopClientBuildRequestTest {
         assertEquals("WOP-RSA3072-SHA256", sign.securityReq());
         assertEquals(1800, sign.expiredSeconds());
         // 基础头必签；无 body 时 digest 不在 signedHeaders
-        assertEquals(java.util.List.of("x-wop-appkey", "x-wop-nonce", "x-wop-timestamp"), sign.signedHeaders());
+        assertEquals(java.util.Arrays.asList("x-wop-appkey", "x-wop-nonce", "x-wop-timestamp"), sign.signedHeaders());
         assertEquals("1_758_900_000_000".replace("_", ""), draft.headers().get("x-wop-timestamp"));
         assertEquals(NONCE.get(), draft.headers().get("x-wop-nonce"));
     }

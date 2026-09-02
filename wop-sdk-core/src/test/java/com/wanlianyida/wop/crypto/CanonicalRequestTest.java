@@ -1,11 +1,14 @@
 package com.wanlianyida.wop.crypto;
 
+import com.wanlianyida.wop.WopSdkException;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * F2 canonicalRequest 构造：5 段 '\n' 连接、URLEncoder 语义（空格→%20）、
@@ -41,6 +44,15 @@ class CanonicalRequestTest {
     }
 
     @Test
+    void urlencodeWithBogusCharsetFailsAsSdkException() {
+        // charset 参数化 seam（Java 8 无 URLEncoder.encode(String, Charset) 重载）：
+        // 非法字符集名 → WopSdkException，而非漏出 Checked 的 UnsupportedEncodingException
+        WopSdkException ex = assertThrows(WopSdkException.class,
+                () -> CanonicalRequest.urlencode("x", "BOGUS"));
+        assertTrue(ex.getMessage().contains("BOGUS"), ex.getMessage());
+    }
+
+    @Test
     void trimallCollapsesWhitespace() {
         assertEquals("a b", CanonicalRequest.trimall("  a \t b  "));
         assertEquals("", CanonicalRequest.trimall(null));
@@ -62,17 +74,18 @@ class CanonicalRequestTest {
     @Test
     void canonicalHeadersEmptyAndNullMaps() {
         assertEquals("", CanonicalRequest.canonicalHeaders(null));
-        assertEquals("", CanonicalRequest.canonicalHeaders(Map.of()));
+        assertEquals("", CanonicalRequest.canonicalHeaders(new LinkedHashMap<String, String>()));
     }
 
     @Test
     void goldenFullCanonicalMatchesGatewayShape() {
         // 与网关侧拼装逐字节对齐的完整样例（含空 query 段）
-        Map<String, String> headers = Map.of(
-                "x-wop-appkey", "app_001",
-                "x-wop-nonce", "n0nce123",
-                "x-wop-timestamp", "1758900000000",
-                "x-wop-content-digest", "sha-256 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf");
+        Map<String, String> headers = new LinkedHashMap<String, String>();
+        headers.put("x-wop-appkey", "app_001");
+        headers.put("x-wop-nonce", "n0nce123");
+        headers.put("x-wop-timestamp", "1758900000000");
+        headers.put("x-wop-content-digest",
+                "sha-256 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf");
         String canonical = CanonicalRequest.build("v1/1800", "POST", "/gateway/open/api", "",
                 CanonicalRequest.canonicalHeaders(headers));
         assertEquals("v1/1800\n"

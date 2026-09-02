@@ -1,7 +1,7 @@
 # wop-java-sdk
 
 [![CI](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/github/license/wop-platform/wop-java-sdk)](LICENSE) [![Release](https://img.shields.io/github/v/release/wop-platform/wop-java-sdk)](https://github.com/wop-platform/wop-java-sdk/releases) [![Maven Central](https://img.shields.io/maven-central/v/com.wanlianyida/wop-java-sdk)](https://central.sonatype.com/artifact/com.wanlianyida/wop-java-sdk)
-[![Java 17+](https://img.shields.io/badge/java-17%2B-orange?logo=openjdk&logoColor=white)](https://openjdk.org/) [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A598%25%20(gate)-yellow)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![Gherkin](https://img.shields.io/badge/bdd-19%20scenarios-orange)](wop-sdk-core/src/test/resources/features/wop-sdk-usage.feature) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Java 8+](https://img.shields.io/badge/java-8%2B-orange?logo=openjdk&logoColor=white)](https://openjdk.org/) [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A598%25%20(gate)-yellow)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![Gherkin](https://img.shields.io/badge/bdd-19%20scenarios-orange)](wop-sdk-core/src/test/resources/features/wop-sdk-usage.feature) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 
 WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 / L2 数字信封 / 验签解密），
@@ -9,15 +9,15 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 
 - 协议真源：[crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md)（v0.3-reviewed）+ [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/sdk/wop-sdk-spec.md)（v1.0-ratified）
 - 向量真源：[crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json)（本仓 fixture 为字节级副本，禁手改）
-- JDK 17+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.1.0）
+- JDK 8+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.1.0；unirest 适配器运行时要求 Java 11+，JDK 8 用户请用 okhttp/jdkhttp 适配器）
 - 运行时依赖仅 BouncyCastle（国密 SM2/SM3/SM4 唯一路径）
 
 | 模块 | 说明 |
 |------|------|
 | `wop-sdk-core` | 协议核心：套件解析、canonicalRequest、`x-wop-sign` 加验签、`x-wop-content-digest`、L2 数字信封、F6 校验顺序、I7 错误模糊化；含 `Transport` 抽象 |
 | `wop-sdk-okhttp` | OkHttp 适配器（okhttp 依赖 `provided`，商户自带版本） |
-| `wop-sdk-jdkhttp` | `java.net.http` 适配器（零额外依赖） |
-| `wop-sdk-unirest` | Kong Unirest 4.x 适配器（unirest-java-core 依赖 `provided`，商户自带版本） |
+| `wop-sdk-jdkhttp` | `HttpURLConnection` 适配器（零额外依赖、Java 8 floor；仅标准方法集，PATCH 等扩展方法见模块 javadoc） |
+| `wop-sdk-unirest` | Kong Unirest 4.x 适配器（unirest-java-core 依赖 `provided`，商户自带版本；运行时要求 Java 11+，上游 4.x 字节码 major 55） |
 
 支持套件：`WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。
 

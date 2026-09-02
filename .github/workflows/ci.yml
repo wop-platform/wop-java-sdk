@@ -17,22 +17,40 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        java: ['8', '21', '25']
+        include:
+          # Temurin 不发布 macOS aarch64 JDK 8（setup-java 报 No matching version
+          # found for SemVer '8'）；java 8 档改用 Zulu，21/25 档保持 Temurin
+          - java: '8'
+            distribution: zulu
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - name: Set up JDK 17
+      - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v6
         with:
-          distribution: temurin
-          java-version: '17'
+          distribution: ${{ matrix.distribution || 'temurin' }}
+          java-version: ${{ matrix.java }}
           cache: maven
       - name: Build, test and enforce coverage gate (line+branch = 100%)
+        if: matrix.java == '21'
         run: mvn -B -ntp verify
+      # 8/25 档只验证编译+测试（覆盖率与 JaCoCo 门禁在 21 档执行）。
+      # wop-sdk-unirest 依赖 unirest-java-core 4.x（class major 55，Java 11+），
+      # JDK 8 javac 无法读取其 class 文件——-release 8 只约束产物字节码，不解决
+      # 依赖版本，跳过测试的 profile 也救不了编译，故 8 档直接排除该模块；
+      # 模块本身仍在 21/25 档全量构建验证。
+      - name: Build and test (JDK 8, exclude wop-sdk-unirest)
+        if: matrix.java == '8'
+        run: mvn -B -ntp test -Djacoco.skip=true -pl '!wop-sdk-unirest'
+      - name: Build and test
+        if: matrix.java == '25'
+        run: mvn -B -ntp test -Djacoco.skip=true
       - name: Upload coverage reports
-        if: always()
+        if: always() && matrix.java == '21'
         uses: actions/upload-artifact@v7
         with:
-          name: jacoco-reports-${{ matrix.os }}
+          name: jacoco-reports-${{ matrix.os }}-jdk${{ matrix.java }}
           path: '**/target/site/jacoco/'
           if-no-files-found: error
 

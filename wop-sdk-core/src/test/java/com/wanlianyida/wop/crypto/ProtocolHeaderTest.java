@@ -1,9 +1,11 @@
 package com.wanlianyida.wop.crypto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.wanlianyida.wop.WopSdkException;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -22,7 +24,7 @@ class ProtocolHeaderTest {
     @Test
     void dekPayloadEncodeMatchesGoldenVectors() {
         for (String id : new String[]{"dek-rsa", "dek-sm2"}) {
-            var vector = TestVectors.firstById("dekPayload", id);
+            JsonNode vector = TestVectors.firstById("dekPayload", id);
             byte[] key = Codec.b64UrlDecode(vector.path("keyB64u").asText());
             byte[] iv = Codec.b64UrlDecode(vector.path("ivB64u").asText());
             assertEquals(vector.path("expected").asText(),
@@ -32,7 +34,7 @@ class ProtocolHeaderTest {
 
     @Test
     void dekPayloadDecodeRoundtrip() {
-        var vector = TestVectors.firstById("dekPayload", "dek-rsa");
+        JsonNode vector = TestVectors.firstById("dekPayload", "dek-rsa");
         DekPayload dek = DekPayload.decode(vector.path("expected").asText());
         assertEquals("AES-256-GCM", dek.alg());
         assertArrayEquals(Codec.b64UrlDecode(vector.path("keyB64u").asText()), dek.key());
@@ -55,7 +57,7 @@ class ProtocolHeaderTest {
     @Test
     void signHeaderBuildsStructuredValue() {
         String header = SignHeader.build("WOP-RSA3072-SHA256", 1800,
-                List.of("x-wop-appkey", "x-wop-content-digest", "x-wop-nonce", "x-wop-timestamp"),
+                Arrays.asList("x-wop-appkey", "x-wop-content-digest", "x-wop-nonce", "x-wop-timestamp"),
                 "c2lnbmF0dXJl");
         assertEquals("WOP-RSA3072-SHA256 v1/1800/x-wop-appkey;x-wop-content-digest;x-wop-nonce;x-wop-timestamp/c2lnbmF0dXJl",
                 header);
@@ -68,7 +70,7 @@ class ProtocolHeaderTest {
         assertEquals("WOP-SM2-SM3", parsed.securityReq());
         assertEquals("v1", parsed.protocolVersion());
         assertEquals(60, parsed.expiredSeconds());
-        assertEquals(List.of("x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"),
+        assertEquals(Arrays.asList("x-wop-content-digest", "x-wop-encrypt", "x-wop-nonce", "x-wop-timestamp"),
                 parsed.signedHeaders());
         assertEquals("Si7Uw5eZm0Kii3Bu", parsed.signature());
     }
@@ -101,7 +103,7 @@ class ProtocolHeaderTest {
     void signHeaderAcceptsZeroPlusExpiredAndDedupSortsHeaders() {
         SignHeader.Parsed parsed = SignHeader.parse("WOP-RSA3072-SHA256 v1/1/x-wop-b;x-wop-a/sig");
         assertEquals(1, parsed.expiredSeconds());
-        assertEquals(List.of("x-wop-b", "x-wop-a"), parsed.signedHeaders());
+        assertEquals(Arrays.asList("x-wop-b", "x-wop-a"), parsed.signedHeaders());
     }
 
     // ==================== EncryptHeader ====================
