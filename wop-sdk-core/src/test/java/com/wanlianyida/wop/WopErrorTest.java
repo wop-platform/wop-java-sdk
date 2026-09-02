@@ -3,6 +3,7 @@ package com.wanlianyida.wop;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,7 +22,7 @@ class WopErrorTest {
         for (WopError.Category category : WopError.Category.values()) {
             names.add(category.name());
         }
-        assertEquals(List.of("configuration", "parse", "unsupported",
+        assertEquals(Arrays.asList("configuration", "parse", "unsupported",
                 "integrity", "consistency", "signature", "decrypt"), names,
                 "闭集逐值且顺序恒定（跨语言契约）");
     }

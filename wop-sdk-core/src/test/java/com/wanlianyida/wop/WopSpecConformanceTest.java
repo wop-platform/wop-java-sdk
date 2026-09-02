@@ -52,7 +52,7 @@ class WopSpecConformanceTest {
         RequestDraft draft = fixedClient("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB)
                 .buildRequest("POST", "/gateway/waybill-query", null, SecurityLevel.L0);
         SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
-        assertEquals(List.of("x-wop-appkey", "x-wop-nonce", "x-wop-timestamp"), sign.signedHeaders());
+        assertEquals(Arrays.asList("x-wop-appkey", "x-wop-nonce", "x-wop-timestamp"), sign.signedHeaders());
         assertEquals(3, sign.signedHeaders().size());
     }
 
