@@ -35,6 +35,7 @@
   "final_gate_cmd": "scripts/run_tests.sh --no-lock",
   "docstring_gate_cmd": "scripts/docstring_gate.py",
   "pr_review_skills": [],
+  "port_point": "55f72d53",
   "upstream_repo": "im47cn/awesome-rules",
   "upstream_path": "~/sources/awesome-rules",
   "feedback_branch_prefix": "feedback/wop-java-sdk"
