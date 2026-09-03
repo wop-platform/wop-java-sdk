@@ -132,7 +132,7 @@
       "id": "D-02",
       "description": "docstring 缺失：删除 WopClient.Builder.build() 公开方法 javadoc（对外 API <100%，docstring 门拦截）",
       "target": "wop-sdk-core/src/main/java/com/wanlianyida/wop/WopClient.java",
-      "find": "        /** 构造客户端：必填项与套件 fail-fast 校验，密钥按套件族即时解析（非法抛 {@link WopSdkException}）。 */\n",
+      "find": "        /** 构造客户端：必填项与套件 fail-fast 校验，密钥按套件族即时解析（非法抛 {@link WopError}，configuration 类）。 */\n",
       "replace": "",
       "gate": "docstring",
       "expect_block": true
