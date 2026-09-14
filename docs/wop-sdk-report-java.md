@@ -160,7 +160,7 @@ d24283b build: 初始化 Maven 多模块骨架（core/okhttp/jdkhttp）与 JaCoC
 
 ### 3. 契约文档核对（用户反馈："找不到 new-gateway-access-contract.md，原则要保持一致"）
 
-- 文件位置：**不在 SDK 仓**，在网关仓 `gtsp-wop-gateway/scripts/poc/new-gateway-access-contract.md`（§6.4 WOP 渠道回调安全协议，草案状态）。spec 真源已迁公共仓 `wop-platform/wop-specs`（README 已指向）。
+- 文件位置：**不在 SDK 仓**，在网关仓 `内部网关仓/scripts/poc/new-gateway-access-contract.md`（§6.4 WOP 渠道回调安全协议，草案状态）。spec 真源已迁公共仓 `wop-platform/wop-specs`（README 已指向）。
 - 一致性核对结论：SDK 与 **冻结真源（crypto-strategy-spec D2 + 网关实现 `GatewayConstants.HEADER_CONTENT_DIGEST`）完全一致**，即 `x-wop-content-digest: <sha-256|sm3> <小写hex>`；该契约文档 §6.4 第 304/307/320 行仍写旧名 `x-wop-content-sha256`（HmacSHA256 时代的"纯 sha256 hex"格式），属**文档滞后**而非实现分歧。canonicalRequest 5 段、signedHeaders 响应侧不含 appkey、L2 信封 `{"encrypted":...}`、DEK 包装算法等其余条款与 SDK 逐项一致。
 - 处置：SDK 仓不修改网关仓文档（真源只读）；建议主会话推动网关侧把 §6.4 三处头名与格式对齐 D2 冻结版。
 
@@ -196,7 +196,7 @@ ab986e6 test: 故障注入场景覆盖（协议层+双适配器网络层）；do
 
 ### 1. 契约对齐（网关仓，用户授权）
 
-- `gtsp-wop-gateway` commit `6302c0c`：`scripts/poc/new-gateway-access-contract.md` §6.4 三处 `x-wop-content-sha256` → `x-wop-content-digest`（D2 冻结格式 + v18 变更记录）
+- `内部网关仓` commit `6302c0c`：`scripts/poc/new-gateway-access-contract.md` §6.4 三处 `x-wop-content-sha256` → `x-wop-content-digest`（D2 冻结格式 + v18 变更记录）
 - 同仓 commit `4113a38`：`docs/design.md` 三处同源残留同步对齐（7.1 头表 / 7.3 signedHeaders / 3.1 回写清单）
 - 网关仓 `docs/`+`scripts/` 旧头名清零（变更记录表保留历史名仅作记录）
 

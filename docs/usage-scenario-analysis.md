@@ -2,7 +2,7 @@
 
 > 日期：2026-08-29
 > 范围：wop-java-sdk（core/okhttp/jdkhttp 三模块）
-> 依据：`gtsp-wop-gateway/docs/wop-sdk-spec.md`（v1.0-ratified）+ WOP 网关协议行为（x-wop-* 头、L2 信封、F6 校验顺序、D2 摘要纪律）
+> 依据：`wop-specs/docs/specs/wop-sdk-spec.md`（v1.0-ratified）+ WOP 网关协议行为（x-wop-* 头、L2 信封、F6 校验顺序、D2 摘要纪律）
 
 ## 1. 使用场景分类（从商户接入视角）
 
