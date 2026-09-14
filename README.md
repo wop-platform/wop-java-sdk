@@ -32,7 +32,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
   <version>0.1.0</version>
 </dependency>
 
-<!-- 可选适配器（三选一）：okhttp / unirest 的客户端依赖 scope=provided（商户自带版本，unirest 即 com.konghq:unirest-java-core） / jdkhttp 零额外依赖。unirest 适配器默认自建 UnirestInstance，长期运行建议经构造器注入复用单例并统一关闭 -->
+<!-- 可选适配器（三选一）：okhttp / unirest 的客户端依赖 scope=provided（商户自带版本，unirest 即 com.konghq:unirest-java-core） / jdkhttp 零额外依赖。unirest 适配器默认自建 UnirestInstance，长期运行建议经构造器注入复用单例并统一关闭。适配器经 META-INF/services 注册，可由 core 的 TransportFactory.discover()（ServiceLoader）解析——要求 classpath 恰一适配器，零/多均以配置错误 fail-fast -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
@@ -66,6 +66,7 @@ RequestDraft draft = client.buildRequest("POST", "/gateway/order/create", body, 
 
 // 2) 发送（自带 HTTP 栈时直接消费 draft；否则用官方适配器）
 Transport transport = new OkHttpTransport("https://gw.example.com");
+// 或免导入经 SPI 发现（classpath 恰一适配器）：TransportFactory.discover().create("https://gw.example.com")
 TransportResponse response = transport.send(draft);
 
 // 3) 校验响应（F6 顺序：验签 → digest 复核 → DEK 解包 → alg 族比对 → bulk 解密）

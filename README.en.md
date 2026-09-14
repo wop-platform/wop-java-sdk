@@ -32,7 +32,7 @@ Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
   <version>0.1.0</version>
 </dependency>
 
-<!-- Optional adapter (pick one): okhttp / unirest client dependencies are provided (bring your own; for unirest that is com.konghq:unirest-java-core) / jdkhttp has zero extra dependencies. The unirest adapter creates its own UnirestInstance by default — for long-running services, inject a shared instance via the constructor and close it on shutdown -->
+<!-- Optional adapter (pick one): okhttp / unirest client dependencies are provided (bring your own; for unirest that is com.konghq:unirest-java-core) / jdkhttp has zero extra dependencies. The unirest adapter creates its own UnirestInstance by default — for long-running services, inject a shared instance via the constructor and close it on shutdown. Adapters register via META-INF/services and can be resolved through core's TransportFactory.discover() (ServiceLoader) — it requires exactly one adapter on the classpath; zero or multiple fail fast with a configuration error -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
@@ -66,6 +66,7 @@ RequestDraft draft = client.buildRequest("POST", "/gateway/order/create", body, 
 
 // 2) Send (consume the draft with your own stack, or use an official adapter)
 Transport transport = new OkHttpTransport("https://gw.example.com");
+// or resolve it via SPI (exactly one adapter on the classpath): TransportFactory.discover().create("https://gw.example.com")
 TransportResponse response = transport.send(draft);
 
 // 3) Verify the response (F6 order: signature -> digest recheck -> DEK unwrap
