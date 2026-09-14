@@ -169,12 +169,12 @@
               <target>
                 <mkdir dir="${project.build.directory}/wop-specs"/>
                 <get src="https://raw.githubusercontent.com/wop-platform/wop-specs/${wopSpecsRef}/crypto/crypto-vectors.json"
-                     dest="${project.build.directory}/wop-specs/crypto-vectors.json"/>
+                     dest="${project.build.directory}/wop-specs/crypto-vectors.json.tmp" failonerror="true"/>
                 <get src="https://raw.githubusercontent.com/wop-platform/wop-specs/${wopSpecsRef}/interop/v1/interop-cases.json"
-                     dest="${project.build.directory}/wop-specs/interop-cases.json"/>
-                <checksum file="${project.build.directory}/wop-specs/crypto-vectors.json"
+                     dest="${project.build.directory}/wop-specs/interop-cases.json.tmp" failonerror="true"/>
+                <checksum file="${project.build.directory}/wop-specs/crypto-vectors.json.tmp"
                           algorithm="SHA-256" property="wopSpecsFetchedCrypto"/>
-                <checksum file="${project.build.directory}/wop-specs/interop-cases.json"
+                <checksum file="${project.build.directory}/wop-specs/interop-cases.json.tmp"
                           algorithm="SHA-256" property="wopSpecsFetchedInterop"/>
                 <condition property="wopSpecsCryptoMismatch">
                   <not>
@@ -190,6 +190,10 @@
                       message="wop-specs crypto-vectors.json sha256 mismatch（期望 ${wopSpecsCryptoVectorsSha256}，实得 ${wopSpecsFetchedCrypto}）：向量变更须先合 wop-specs PR；真源升级后以新 commit SHA 与新 sha256 同步更新 wop-sdk-core/pom.xml 的 wopSpecsRef / wopSpecsCryptoVectorsSha256（见 CONTRIBUTING §4）。"/>
                 <fail if="wopSpecsInteropMismatch"
                       message="wop-specs interop-cases.json sha256 mismatch（期望 ${wopSpecsInteropCasesSha256}，实得 ${wopSpecsFetchedInterop}）：样本集升级须六仓协同；升级后同步更新 wop-sdk-core/pom.xml 的 wopSpecsInteropCasesSha256 与 InteropConformanceTest 哨兵（FIXTURE_SHA256 / KNOWN_IDS）。"/>
+                <move file="${project.build.directory}/wop-specs/crypto-vectors.json.tmp"
+                      tofile="${project.build.directory}/wop-specs/crypto-vectors.json" overwrite="true"/>
+                <move file="${project.build.directory}/wop-specs/interop-cases.json.tmp"
+                      tofile="${project.build.directory}/wop-specs/interop-cases.json" overwrite="true"/>
               </target>
             </configuration>
           </execution>
