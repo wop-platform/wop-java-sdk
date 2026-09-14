@@ -33,6 +33,8 @@ I7 落地：`VerifyResult.Reason.SIGNATURE_FAILED`（"签名验证失败"）与 
 
 fixture：`vectors/crypto-vectors.json`（真源字节级副本，`cmp` 校验一致），经 Maven testResources 进入测试 classpath，CI 与本地消费同一份。
 
+> **2026-09-14 修订**：上述"真源字节级副本"机制已废弃。`vectors/crypto-vectors.json` 与测试资源中的 `interop-cases.json` 本地副本已删除，改为构建期按 wop-specs commit SHA（`wop-sdk-core/pom.xml` 的 `wopSpecsRef`，现钉 `4a50824b`）从 raw.githubusercontent.com 拉取至 `target/wop-specs/`，并逐字节 sha256 校验（`wopSpecsCryptoVectorsSha256` / `wopSpecsInteropCasesSha256`），不匹配即构建失败——fail-closed 且每次构建都比对，强于原 CI 期 `cmp` 比对。构建需可访问 raw.githubusercontent.com（公开仓，无需鉴权）。下文命令输出与 `ls` 证据块为验收时点快照（彼时副本仍存在），保留原样不回写。机制与升级流程详见 CONTRIBUTING §4（提交 01c4193 / bb3a8af）。
+
 正向量（字节级）：
 - digest：SHA-256/SM3 → expectedHex/expectedHeader ✓
 - messageEncrypt：AES-256-GCM/SM4-GCM 固定 key/IV → cipherTagB64u ✓（固定 IV 入口 `encryptForVector` 包私有，公开 API 仅 CSPRNG 随机 IV，I4）
