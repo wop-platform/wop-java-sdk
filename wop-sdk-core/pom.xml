@@ -169,9 +169,9 @@
               <target>
                 <mkdir dir="${project.build.directory}/wop-specs"/>
                 <get src="https://raw.githubusercontent.com/wop-platform/wop-specs/${wopSpecsRef}/crypto/crypto-vectors.json"
-                     dest="${project.build.directory}/wop-specs/crypto-vectors.json.tmp" failonerror="true"/>
+                     dest="${project.build.directory}/wop-specs/crypto-vectors.json.tmp"/>
                 <get src="https://raw.githubusercontent.com/wop-platform/wop-specs/${wopSpecsRef}/interop/v1/interop-cases.json"
-                     dest="${project.build.directory}/wop-specs/interop-cases.json.tmp" failonerror="true"/>
+                     dest="${project.build.directory}/wop-specs/interop-cases.json.tmp"/>
                 <checksum file="${project.build.directory}/wop-specs/crypto-vectors.json.tmp"
                           algorithm="SHA-256" property="wopSpecsFetchedCrypto"/>
                 <checksum file="${project.build.directory}/wop-specs/interop-cases.json.tmp"
