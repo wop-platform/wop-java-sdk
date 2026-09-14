@@ -32,7 +32,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
   <version>0.1.0</version>
 </dependency>
 
-<!-- 可选适配器（三选一）：okhttp / unirest 的客户端依赖 scope=provided（商户自带版本，unirest 即 com.konghq:unirest-java-core） / jdkhttp 零额外依赖。unirest 适配器默认自建 UnirestInstance，长期运行建议经构造器注入复用单例并统一关闭。同 classpath 引入多个适配器时，core 的 TransportFactory 发现（ServiceLoader）会以配置错误 fail-fast -->
+<!-- 可选适配器（三选一）：okhttp / unirest 的客户端依赖 scope=provided（商户自带版本，unirest 即 com.konghq:unirest-java-core） / jdkhttp 零额外依赖。unirest 适配器默认自建 UnirestInstance，长期运行建议经构造器注入复用单例并统一关闭。适配器经 META-INF/services 注册，可由 core 的 TransportFactory.discover()（ServiceLoader）解析——要求 classpath 恰一适配器，零/多均以配置错误 fail-fast -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>

@@ -32,7 +32,7 @@ Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
   <version>0.1.0</version>
 </dependency>
 
-<!-- Optional adapter (pick one): okhttp / unirest client dependencies are provided (bring your own; for unirest that is com.konghq:unirest-java-core) / jdkhttp has zero extra dependencies. The unirest adapter creates its own UnirestInstance by default — for long-running services, inject a shared instance via the constructor and close it on shutdown. If more than one adapter ends up on the classpath, core's TransportFactory discovery (ServiceLoader) fails fast with a configuration error -->
+<!-- Optional adapter (pick one): okhttp / unirest client dependencies are provided (bring your own; for unirest that is com.konghq:unirest-java-core) / jdkhttp has zero extra dependencies. The unirest adapter creates its own UnirestInstance by default — for long-running services, inject a shared instance via the constructor and close it on shutdown. Adapters register via META-INF/services and can be resolved through core's TransportFactory.discover() (ServiceLoader) — it requires exactly one adapter on the classpath; zero or multiple fail fast with a configuration error -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
