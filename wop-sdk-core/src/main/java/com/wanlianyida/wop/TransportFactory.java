@@ -41,7 +41,7 @@ public interface TransportFactory {
                 return discover(tccl);
             } catch (WopError e) {
                 // 零 factory 时回退定义类加载器重试；损坏注册 / 多 factory 错误原样上抛（不掩盖配置错误）
-                if (e.getMessage() == null || !e.getMessage().startsWith("classpath 未发现 TransportFactory")) {
+                if (!e.getMessage().startsWith("classpath 未发现 TransportFactory")) {
                     throw e;
                 }
             }
