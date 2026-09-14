@@ -9,8 +9,8 @@ core (signing / digest / L2 digital envelope / verify & decrypt) so merchants ca
 integrate securely without understanding canonicalRequest, suite derivation or
 wire byte formats.
 
-- Protocol sources: [crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md) (v0.3-reviewed) + [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/sdk/wop-sdk-spec.md) (v1.0-ratified)
-- Vector source of truth: [crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json) (byte-level copy in this repo, never edit by hand)
+- Protocol sources: [crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md) (v0.4-draft) + [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/docs/specs/wop-sdk-spec.md) (v1.0-ratified)
+- Vector source of truth: [crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json) (fetched at build time from the pinned commit SHA with sha256 verification; no copy kept in this repo)
 - JDK 8+, Maven multi-module (`groupId: com.wanlianyida`, version 0.1.0; the unirest adapter requires Java 11+ at runtime — JDK 8 users should use the okhttp/jdkhttp adapters)
 - Single runtime dependency: BouncyCastle (the only supported path for SM2/SM3/SM4)
 
@@ -107,9 +107,11 @@ VerifyResult callback = client.verifyCallback(headers, rawBody, "/merchant/callb
 
 ## Vector Self-Test (conformance)
 
-The golden vector fixture lives at `vectors/crypto-vectors.json` (copy of the
-source of truth, never edit by hand); tests consume the same copy on the
-classpath, locally and in CI:
+Golden vectors and the interop sample set are not copied into this repo: the
+build fetches them from wop-specs at the commit SHA pinned in the pom
+(`wopSpecsRef`), verifies each file's sha256, and mounts them onto the test
+classpath — one source of truth, identical for local and CI builds (requires
+access to raw.githubusercontent.com):
 
 ```bash
 mvn verify

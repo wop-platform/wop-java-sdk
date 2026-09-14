@@ -42,8 +42,8 @@
       "id": "M-01",
       "description": "周界清单单边漂移：MISSION 增加条目而 guard 副本未同步（self_check 应发现不一致）",
       "target": "MISSION.md",
-      "find": "`docs/`、`vectors/`",
-      "replace": "`docs/`、`vectors/`、`factory-extra/`",
+      "find": "`LICENSE`、`docs/`",
+      "replace": "`LICENSE`、`docs/`、`factory-extra/`",
       "gate": "guard",
       "expect_block": true
     },
@@ -51,8 +51,8 @@
       "id": "M-02",
       "description": "周界指向不存在路径：MISSION 条目改名为不存在的目录（self_check 存在性检查应拦截）",
       "target": "MISSION.md",
-      "find": "`docs/`、`vectors/`",
-      "replace": "`docs/`、`vectors-renamed/`",
+      "find": "`LICENSE`、`docs/`",
+      "replace": "`LICENSE`、`docs-renamed/`",
       "gate": "guard",
       "expect_block": true
     },

@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * interop conformance 消费端（协议编排跨仓一致性合同，wop-specs/interop/v1）。
  * <p>
- * fixture 为真源字节副本（classpath /interop-cases.json，禁手改；sha256 哨兵钉死），
+ * fixture 构建期自 wop-specs 真源钉版拉取（classpath /interop-cases.json；pom sha256 钉 + 本类双哨兵），
  * 与黄金向量（crypto-vectors.json）同源密钥材料。合同条款：
  * <ul>
  *   <li>build 方向：同 input（固定 timestamp/nonce/随机流）必须复现同 draft——
@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class InteropConformanceTest {
 
-    /** 真源 sha256（wop-specs/interop/v1/interop-cases.json）；升级样本集须同步此哨兵。 */
+    /** 真源 sha256（wop-specs/interop/v1/interop-cases.json）；与 pom wopSpecsInteropCasesSha256 双钉，升级样本集须同步。 */
     private static final String FIXTURE_SHA256 =
             "c920ca1a93ccb3899a659f59fed6ec4652cf9e1b3b58bbdac23c45ac3ed2353e";
 
@@ -75,7 +75,7 @@ public class InteropConformanceTest {
 
     private static byte[] fixtureBytes() {
         try (InputStream in = InteropConformanceTest.class.getResourceAsStream("/interop-cases.json")) {
-            assertNotNull(in, "classpath 缺少 interop-cases.json（真源副本应位于 src/test/resources）");
+            assertNotNull(in, "classpath 缺少 interop-cases.json（构建期拉取未完成：检查网络与 pom 的 wopSpecsRef 钉版）");
             return readAll(in);
         } catch (Exception e) {
             throw new IllegalStateException("interop-cases.json 读取失败", e);
