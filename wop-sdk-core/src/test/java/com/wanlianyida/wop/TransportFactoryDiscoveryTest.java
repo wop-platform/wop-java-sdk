@@ -108,6 +108,43 @@ class TransportFactoryDiscoveryTest {
         }
     }
 
+    @Test
+    void multiFactoriesFromTcclPropagateWithoutFallback(@TempDir Path tempDir) throws IOException {
+        // 多态经无参 discover()：TCCL 命中多 factory → 错误原样上抛，
+        // 不被「回退定义类加载器」掩盖（PR#35 评审：仅零结果触发回退）
+        writeServices(tempDir, "com.wanlianyida.wop.TestAlphaTransportFactory\n"
+                + "com.wanlianyida.wop.TestBetaTransportFactory\n");
+        try (URLClassLoader multi = new URLClassLoader(new URL[]{tempDir.toUri().toURL()},
+                TransportFactoryDiscoveryTest.class.getClassLoader())) {
+            Thread current = Thread.currentThread();
+            ClassLoader original = current.getContextClassLoader();
+            current.setContextClassLoader(multi);
+            try {
+                WopError ex = assertThrows(WopError.class, () -> TransportFactory.discover());
+                assertEquals(WopError.Category.configuration, ex.category());
+                assertTrue(ex.getMessage().contains("alpha"), ex.getMessage());
+                assertTrue(ex.getMessage().contains("beta"), ex.getMessage());
+            } finally {
+                current.setContextClassLoader(original);
+            }
+        }
+    }
+
+    @Test
+    void nameFailureWrappedAsConfiguration(@TempDir Path tempDir) throws IOException {
+        // name() 抛错：多 factory 列名时单个注册项的运行时异常包装为
+        // WopError.configuration（含 cause），与 ServiceLoader 加载失败的错误形状一致
+        writeServices(tempDir, "com.wanlianyida.wop.TestAlphaTransportFactory\n"
+                + "com.wanlianyida.wop.TestThrowingNameTransportFactory\n");
+        try (URLClassLoader multi = new URLClassLoader(new URL[]{tempDir.toUri().toURL()},
+                TransportFactoryDiscoveryTest.class.getClassLoader())) {
+            WopError ex = assertThrows(WopError.class, () -> TransportFactory.discover(multi));
+            assertEquals(WopError.Category.configuration, ex.category());
+            assertTrue(ex.getMessage().contains("TestThrowingNameTransportFactory"), ex.getMessage());
+            assertInstanceOf(IllegalStateException.class, ex.getCause());
+        }
+    }
+
     private static void writeServices(Path dir, String content) throws IOException {
         Path services = dir.resolve("META-INF/services");
         Files.createDirectories(services);
