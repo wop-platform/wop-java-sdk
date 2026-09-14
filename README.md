@@ -10,7 +10,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 商户无需理解 canonicalRequest、套件推导与线上字节格式即可安全对接。
 
 - 协议真源：[crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md)（v0.4-draft）+ [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/docs/specs/wop-sdk-spec.md)（v1.0-ratified）
-- 向量真源：[crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json)（本仓 fixture 为字节级副本，禁手改）
+- 向量真源：[crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json)（构建期按 commit SHA 钉版拉取 + sha256 校验，本仓不保留副本）
 - JDK 8+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.1.0；unirest 适配器运行时要求 Java 11+，JDK 8 用户请用 okhttp/jdkhttp 适配器）
 - 运行时依赖仅 BouncyCastle（国密 SM2/SM3/SM4 唯一路径）
 
@@ -103,8 +103,9 @@ VerifyResult callback = client.verifyCallback(headers, rawBody, "/merchant/callb
 
 ## 向量自测（conformance）
 
-黄金向量 fixture 位于 `vectors/crypto-vectors.json`（真源副本，禁止手改），
-测试 classpath 消费同一份；本地与 CI 一致：
+黄金向量与 interop 样本集不落副本：构建期按 wop-specs commit SHA（pom `wopSpecsRef` 钉版）
+从 raw.githubusercontent.com 拉取并逐字节 sha256 校验，再挂入测试 classpath——
+真源唯一，本地与 CI 消费同一来源（构建需可访问该域名）：
 
 ```bash
 mvn verify

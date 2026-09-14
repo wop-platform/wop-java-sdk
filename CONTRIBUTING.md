@@ -5,8 +5,8 @@
 ## 1. 项目定位
 
 本仓库是 WOP 网关商户侧**官方** Java 客户端，功能面与验收标准对齐
-[wop-sdk-spec v1.0-ratified](https://github.com/wop-platform/gtsp-wop-gateway/blob/main/docs/wop-sdk-spec.md)。
-协议正确性以网关真源导出的黄金向量为唯一锚（见 §4），任何实现改动不允许偏离向量。
+[wop-sdk-spec v1.0-ratified](https://github.com/wop-platform/wop-specs/blob/main/docs/specs/wop-sdk-spec.md)。
+协议正确性以黄金向量（wop-specs 真源，见 §4）为唯一锚，任何实现改动不允许偏离向量。
 
 Maven 多模块布局（`groupId: com.wanlianyida`，JDK 8+）：
 
@@ -60,11 +60,12 @@ mvn -pl wop-sdk-core org.pitest:pitest-maven:mutationCoverage
 
 ## 4. 黄金向量纪律（协议正确性唯一锚）
 
-- `vectors/crypto-vectors.json` 是网关真源（`gtsp-wop-gateway` 仓库 `docs/crypto-vectors.json`）的**只读副本**，**禁止手改**
-- `wop-sdk-core` 通过 testResources 将其挂入测试 classpath，本地与 CI 消费同一份
+- 唯一真源是 wop-specs（`crypto/crypto-vectors.json` 与 `interop/v1/interop-cases.json`）；本仓**不保留字节副本**
+- `wop-sdk-core/pom.xml` 在 `generate-test-resources` 阶段以 antrun 按 `wopSpecsRef`（wop-specs commit SHA）拉取两份 fixture，并以 `wopSpecsCryptoVectorsSha256` / `wopSpecsInteropCasesSha256` 逐字节校验，不匹配即构建失败（fail-closed；等价并强于"CI 期字节比对"——每次构建都比对）
+- 拉取产物进 `target/wop-specs/`，经 testResources 挂入测试 classpath；`src/test/resources` 禁止再放这两份文件（避免遮蔽真源）；构建需可访问 raw.githubusercontent.com（wop-specs 为公开仓）
 - 新增/变更协议行为的标准流程：
-  1. 先改网关仓真源（或从网关重新导出向量）；
-  2. 同步副本到本仓 `vectors/`；
+  1. 先在 wop-specs 仓以 PR 修改真源 `crypto/crypto-vectors.json`（向量变更 = 破坏性变更，须 bump 向量版本，先合 PR、后改码）；
+  2. 以新 commit SHA 与新 sha256 更新本仓 pom 的 `wopSpecsRef` 与对应 sha256 钉（interop 样本集升级还须同步 `InteropConformanceTest` 的 `FIXTURE_SHA256` / `KNOWN_IDS` 哨兵）；
   3. 更新全量消费测试（字节级断言），确保新向量被真实消费，不允许"挂上文件但没人断言"
 - 负向量（篡改密文、跨套件族材料、错误格式、非严格 base64url 等）必须有对应的"必须拒绝"断言，不允许只测正向路径
 
@@ -113,7 +114,7 @@ Conventional Commits，body 用中文说明动机与影响：
 
 - 目标分支：`main`
 - CI 必须全绿：全部测试通过 + 覆盖率门禁（≥98%）+ 向量 conformance 套件通过
-- 涉协议行为的 PR 必须同时说明对应的网关真源/向量变更（见 §4）
+- 涉协议行为的 PR 必须同时说明对应的 wop-specs 真源/向量变更（见 §4）
 - reviewer 复核通过后合并
 
 ## 8. 发布流程

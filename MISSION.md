@@ -39,7 +39,7 @@ accept 当且仅当 issue 同时满足：
 以下路径工厂永不可触碰；变更只能走人类 PR：
 
 - 治理与真相源：`MISSION.md`、`README.md`、`README.en.md`、`CONTRIBUTING.md`、
-  `LICENSE`、`docs/`、`vectors/`
+  `LICENSE`、`docs/`
 - 质检线：`.factory/`、`scripts/`
 - 构建与发布面：`pom.xml`、`wop-sdk-core/pom.xml`、`wop-sdk-okhttp/pom.xml`、
   `wop-sdk-jdkhttp/pom.xml`、`.gitignore`、`.github/`

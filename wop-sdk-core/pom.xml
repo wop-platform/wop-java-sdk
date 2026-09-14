@@ -14,6 +14,16 @@
   <name>WOP Java SDK :: Core</name>
   <description>协议核心：套件解析、canonicalRequest、x-wop-sign、x-wop-content-digest、L2 数字信封、F6 校验顺序、I7 错误模糊化（运行时依赖仅 BouncyCastle）</description>
 
+  <properties>
+    <!-- wop-specs 真源钉版（黄金向量 + interop 样本集，本仓不保留字节副本）：
+         antrun 在 generate-test-resources 阶段按 commit SHA 从 raw.githubusercontent.com
+         拉取并逐字节 sha256 校验，不一致即构建失败（fail-closed）。升级流程见
+         CONTRIBUTING §4：先合 wop-specs PR，再以下面三项同步新钉。 -->
+    <wopSpecsRef>4a50824b3b9008fbda7a6c675209ccebc713f245</wopSpecsRef>
+    <wopSpecsCryptoVectorsSha256>1cbb1d3c494109d58e80cfd450c4aaf4159f991029abb875514517a232fd8001</wopSpecsCryptoVectorsSha256>
+    <wopSpecsInteropCasesSha256>c920ca1a93ccb3899a659f59fed6ec4652cf9e1b3b58bbdac23c45ac3ed2353e</wopSpecsInteropCasesSha256>
+  </properties>
+
   <dependencies>
     <!-- 唯一运行时依赖：BouncyCastle（国密 SM2/SM3/SM4） -->
     <dependency>
@@ -57,11 +67,13 @@
       <testResource>
         <directory>src/test/resources</directory>
       </testResource>
-      <!-- 向量真源副本位于仓库根 vectors/（spec §4），CI 与本地测试消费同一份 -->
+      <!-- wop-specs 真源 fixture：antrun fetch-wop-specs-fixtures 拉取进 target/wop-specs，
+           本仓不保留字节副本；src/test/resources 内禁止再放这两份文件（避免遮蔽真源） -->
       <testResource>
-        <directory>${project.basedir}/../vectors</directory>
+        <directory>${project.build.directory}/wop-specs</directory>
         <includes>
           <include>crypto-vectors.json</include>
+          <include>interop-cases.json</include>
         </includes>
       </testResource>
     </testResources>
@@ -137,6 +149,51 @@
             <version>1.0.0</version>
           </dependency>
         </dependencies>
+      </plugin>
+      <!-- ===== wop-specs 真源 fixture 拉取（引用而非副本，fail-closed）===== -->
+      <!-- 按 pom 钉版（wopSpecsRef + sha256）拉取黄金向量与 interop 样本集；
+           构建需可访问 raw.githubusercontent.com（wop-specs 为公开仓），
+           离线/被篡改/钉版过期时在测试运行前即失败。 -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>fetch-wop-specs-fixtures</id>
+            <phase>generate-test-resources</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <mkdir dir="${project.build.directory}/wop-specs"/>
+                <get src="https://raw.githubusercontent.com/wop-platform/wop-specs/${wopSpecsRef}/crypto/crypto-vectors.json"
+                     dest="${project.build.directory}/wop-specs/crypto-vectors.json"/>
+                <get src="https://raw.githubusercontent.com/wop-platform/wop-specs/${wopSpecsRef}/interop/v1/interop-cases.json"
+                     dest="${project.build.directory}/wop-specs/interop-cases.json"/>
+                <checksum file="${project.build.directory}/wop-specs/crypto-vectors.json"
+                          algorithm="SHA-256" property="wopSpecsFetchedCrypto"/>
+                <checksum file="${project.build.directory}/wop-specs/interop-cases.json"
+                          algorithm="SHA-256" property="wopSpecsFetchedInterop"/>
+                <condition property="wopSpecsCryptoMismatch">
+                  <not>
+                    <equals arg1="${wopSpecsFetchedCrypto}" arg2="${wopSpecsCryptoVectorsSha256}" casesensitive="false"/>
+                  </not>
+                </condition>
+                <condition property="wopSpecsInteropMismatch">
+                  <not>
+                    <equals arg1="${wopSpecsFetchedInterop}" arg2="${wopSpecsInteropCasesSha256}" casesensitive="false"/>
+                  </not>
+                </condition>
+                <fail if="wopSpecsCryptoMismatch"
+                      message="wop-specs crypto-vectors.json sha256 mismatch（期望 ${wopSpecsCryptoVectorsSha256}，实得 ${wopSpecsFetchedCrypto}）：向量变更须先合 wop-specs PR；真源升级后以新 commit SHA 与新 sha256 同步更新 wop-sdk-core/pom.xml 的 wopSpecsRef / wopSpecsCryptoVectorsSha256（见 CONTRIBUTING §4）。"/>
+                <fail if="wopSpecsInteropMismatch"
+                      message="wop-specs interop-cases.json sha256 mismatch（期望 ${wopSpecsInteropCasesSha256}，实得 ${wopSpecsFetchedInterop}）：样本集升级须六仓协同；升级后同步更新 wop-sdk-core/pom.xml 的 wopSpecsInteropCasesSha256 与 InteropConformanceTest 哨兵（FIXTURE_SHA256 / KNOWN_IDS）。"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
