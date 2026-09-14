@@ -36,7 +36,17 @@ public interface TransportFactory {
      */
     static TransportFactory discover() {
         ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        return discover(tccl != null ? tccl : TransportFactory.class.getClassLoader());
+        if (tccl != null) {
+            try {
+                return discover(tccl);
+            } catch (WopError e) {
+                // 零 factory 时回退定义类加载器重试；损坏注册 / 多 factory 错误原样上抛（不掩盖配置错误）
+                if (e.getMessage() == null || !e.getMessage().startsWith("classpath 未发现 TransportFactory")) {
+                    throw e;
+                }
+            }
+        }
+        return discover(TransportFactory.class.getClassLoader());
     }
 
     /**
@@ -62,7 +72,12 @@ public interface TransportFactory {
         }
         List<String> names = new ArrayList<>();
         for (TransportFactory factory : found) {
-            names.add(factory.name());
+            try {
+                names.add(factory.name());
+            } catch (RuntimeException e) {
+                throw WopError.configuration(
+                        "TransportFactory SPI 注册项 name() 失败: " + factory.getClass().getName(), e);
+            }
         }
         throw WopError.configuration("classpath 存在多个 TransportFactory（" + String.join(", ", names)
                 + "）；多传输选择规则未落地（P2），请仅保留一个传输模块");

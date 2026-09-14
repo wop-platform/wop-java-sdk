@@ -54,6 +54,21 @@ class TransportFactoryDiscoveryTest {
     }
 
     @Test
+    void emptyTcclFallsBackToDefiningLoader(@TempDir Path tempDir) throws IOException {
+        // 回归（PR#35 评审）：TCCL 非空但服务目录为空（看不到 SPI 注册）→ 回退定义类加载器仍可发现
+        try (URLClassLoader emptyTccl = new URLClassLoader(new URL[]{tempDir.toUri().toURL()}, null)) {
+            Thread current = Thread.currentThread();
+            ClassLoader original = current.getContextClassLoader();
+            current.setContextClassLoader(emptyTccl);
+            try {
+                assertEquals("alpha", TransportFactory.discover().name());
+            } finally {
+                current.setContextClassLoader(original);
+            }
+        }
+    }
+
+    @Test
     void zeroFactoriesFailFastWithLookupHint() throws IOException {
         // 零态：隔离 loader 仅含 core 类目录，无任何 META-INF/services 注册
         URL coreClasses = TransportFactory.class.getProtectionDomain().getCodeSource().getLocation();
