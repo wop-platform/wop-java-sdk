@@ -4,10 +4,12 @@
 [![Java 8+](https://img.shields.io/badge/java-8%2B-orange?logo=openjdk&logoColor=white)](https://openjdk.org/) [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A598%25%20(gate)-yellow)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![Gherkin](https://img.shields.io/badge/bdd-19%20scenarios-orange)](wop-sdk-core/src/test/resources/features/wop-sdk-usage.feature) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 
+> **WOP · 万联易达开放平台** 官方 Java SDK —— 协议与黄金向量真源：[wop-specs](https://github.com/wop-platform/wop-specs)
+
 WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 / L2 数字信封 / 验签解密），
 商户无需理解 canonicalRequest、套件推导与线上字节格式即可安全对接。
 
-- 协议真源：[crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md)（v0.3-reviewed）+ [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/sdk/wop-sdk-spec.md)（v1.0-ratified）
+- 协议真源：[crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md)（v0.4-draft）+ [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/docs/specs/wop-sdk-spec.md)（v1.0-ratified）
 - 向量真源：[crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json)（本仓 fixture 为字节级副本，禁手改）
 - JDK 8+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.1.0；unirest 适配器运行时要求 Java 11+，JDK 8 用户请用 okhttp/jdkhttp 适配器）
 - 运行时依赖仅 BouncyCastle（国密 SM2/SM3/SM4 唯一路径）
@@ -121,6 +123,16 @@ MGF1-SHA-1 陷阱、SM2 C1C3C2 解密与 C1C2C3 拒收、DEK 载荷、digest 头
   - 明确类（帮助集成自查）：签名头/加密指令格式、套件不支持、digest 缺失或不匹配、DEK alg 与套件族不符、密文载体格式
   - **模糊类**（防 oracle）：`签名验证失败` / `解密失败`——不区分 tag 失败、密钥不符等细节
 - 防重放辅助（F9）：每次请求 CSPRNG 生成 32 位 nonce 与毫秒时间戳；时间窗校验由网关执行
+
+## 🧩 WOP 生态导航 | Ecosystem
+
+| 类别 | 组件 |
+|------|------|
+| 协议与向量真源 | [wop-specs](https://github.com/wop-platform/wop-specs) —— crypto-strategy-spec · wop-sdk-spec · 黄金测试向量 |
+| 官方 SDK（六语言） | [Java](https://github.com/wop-platform/wop-java-sdk) · [Go](https://github.com/wop-platform/wop-go-sdk) · [Python](https://github.com/wop-platform/wop-python-sdk) · [PHP](https://github.com/wop-platform/wop-php-sdk) · [.NET](https://github.com/wop-platform/wop-dotnet-sdk) · [TypeScript](https://github.com/wop-platform/wop-typescript-sdk) |
+| 浏览器工作台 | [wop-web-tools](https://github.com/wop-platform/wop-web-tools) —— 密钥生成 · 报文联调 · 国密 · 六语言代码片段 |
+| Agent 技能包 | [wop-skills](https://github.com/wop-platform/wop-skills) —— 零代码调用 · 联调对拍 · 62 错误码排错 |
+| 平台服务（企业内部） | 统一接入网关 · 核心逻辑服务 · 回调服务 · 开发者门户 · 文档中心 |
 
 ## 许可证
 
