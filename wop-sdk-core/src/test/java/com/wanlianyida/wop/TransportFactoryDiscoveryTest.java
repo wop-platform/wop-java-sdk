@@ -83,7 +83,7 @@ class TransportFactoryDiscoveryTest {
 
     @Test
     void multipleFactoriesFailFastListingNames(@TempDir Path tempDir) throws IOException {
-        // 多态：临时注册 alpha+beta 叠加测试 classpath（alpha 重复注册被去重）→ 两个 factory
+        // 多态且无 jdkhttp：须 -Dwop.transport= 显式指定
         writeServices(tempDir, "com.wanlianyida.wop.TestAlphaTransportFactory\n"
                 + "com.wanlianyida.wop.TestBetaTransportFactory\n");
         try (URLClassLoader multi = new URLClassLoader(new URL[]{tempDir.toUri().toURL()},
@@ -92,7 +92,55 @@ class TransportFactoryDiscoveryTest {
             assertEquals(WopError.Category.configuration, ex.category());
             assertTrue(ex.getMessage().contains("alpha"), ex.getMessage());
             assertTrue(ex.getMessage().contains("beta"), ex.getMessage());
-            assertTrue(ex.getMessage().contains("P2"), ex.getMessage());
+            assertTrue(ex.getMessage().contains("wop.transport"), ex.getMessage());
+        }
+    }
+
+    @Test
+    void multipleFactoriesPreferJdkhttpByDefault(@TempDir Path tempDir) throws IOException {
+        writeServices(tempDir, "com.wanlianyida.wop.TestAlphaTransportFactory\n"
+                + "com.wanlianyida.wop.TestJdkhttpTransportFactory\n");
+        try (URLClassLoader multi = new URLClassLoader(new URL[]{tempDir.toUri().toURL()},
+                TransportFactoryDiscoveryTest.class.getClassLoader())) {
+            assertEquals("jdkhttp", TransportFactory.discover(multi).name());
+        }
+    }
+
+    @Test
+    void wopTransportSelectsExplicitFactory(@TempDir Path tempDir) throws IOException {
+        writeServices(tempDir, "com.wanlianyida.wop.TestAlphaTransportFactory\n"
+                + "com.wanlianyida.wop.TestBetaTransportFactory\n");
+        String previous = System.getProperty(TransportFactory.TRANSPORT_PROPERTY);
+        System.setProperty(TransportFactory.TRANSPORT_PROPERTY, "beta");
+        try (URLClassLoader multi = new URLClassLoader(new URL[]{tempDir.toUri().toURL()},
+                TransportFactoryDiscoveryTest.class.getClassLoader())) {
+            assertEquals("beta", TransportFactory.discover(multi).name());
+        } finally {
+            if (previous == null) {
+                System.clearProperty(TransportFactory.TRANSPORT_PROPERTY);
+            } else {
+                System.setProperty(TransportFactory.TRANSPORT_PROPERTY, previous);
+            }
+        }
+    }
+
+    @Test
+    void wopTransportInvalidValueListsAvailable(@TempDir Path tempDir) throws IOException {
+        writeServices(tempDir, "com.wanlianyida.wop.TestAlphaTransportFactory\n"
+                + "com.wanlianyida.wop.TestBetaTransportFactory\n");
+        String previous = System.getProperty(TransportFactory.TRANSPORT_PROPERTY);
+        System.setProperty(TransportFactory.TRANSPORT_PROPERTY, "missing");
+        try (URLClassLoader multi = new URLClassLoader(new URL[]{tempDir.toUri().toURL()},
+                TransportFactoryDiscoveryTest.class.getClassLoader())) {
+            WopError ex = assertThrows(WopError.class, () -> TransportFactory.discover(multi));
+            assertTrue(ex.getMessage().contains("wop.transport=missing"), ex.getMessage());
+            assertTrue(ex.getMessage().contains("alpha"), ex.getMessage());
+        } finally {
+            if (previous == null) {
+                System.clearProperty(TransportFactory.TRANSPORT_PROPERTY);
+            } else {
+                System.setProperty(TransportFactory.TRANSPORT_PROPERTY, previous);
+            }
         }
     }
 

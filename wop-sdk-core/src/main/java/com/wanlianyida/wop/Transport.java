@@ -9,4 +9,11 @@ public interface Transport {
 
     /** 发送草稿并返回响应快照；传输失败（连接/超时等系统类）抛 {@link WopSdkException}。 */
     TransportResponse send(RequestDraft draft);
+
+    /**
+     * 带 {@link TransportCall} 的发送（§7.1）；商户自定义 Transport 仅实现单参时走 default 回退。
+     */
+    default TransportResponse send(RequestDraft draft, TransportCall call) {
+        return send(draft);
+    }
 }

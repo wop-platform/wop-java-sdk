@@ -11,6 +11,8 @@ import com.wanlianyida.wop.crypto.KeyCodec;
 import com.wanlianyida.wop.crypto.SignHeader;
 import com.wanlianyida.wop.crypto.WopSuiteException;
 import com.wanlianyida.wop.config.ConfigUrlUtils;
+import com.wanlianyida.wop.config.HttpClientSettings;
+import com.wanlianyida.wop.config.WopRequestContext;
 import com.wanlianyida.wop.config.WopSdkConfig;
 import com.wanlianyida.wop.config.WopSdkConfigLoader;
 import com.wanlianyida.wop.crypto.strategies.CipherResult;
@@ -20,6 +22,7 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,6 +61,8 @@ public final class WopClient {
 
     private final Config config;
     private final WopSdkConfig sdkConfig;
+    /** §6.4：none() 时复用的预解析默认上下文。 */
+    private final WopRequestContext defaultRequestContext;
     private final Transport transport;
     private final AlgorithmSuite suite;
     private final PrivateKey merchantPrivateKey;
@@ -80,6 +85,9 @@ public final class WopClient {
                       LongSupplier clock, Supplier<String> nonceGen, SecureRandom random) {
         this.config = config;
         this.sdkConfig = sdkConfig;
+        this.defaultRequestContext = sdkConfig == null
+                ? null
+                : WopRequestContext.resolve(sdkConfig, WopRequestOptions.none());
         this.transport = transport;
         this.suite = config.suite();
         this.merchantPrivateKey = KeyCodec.parsePrivateKey(config.merchantPrivateKey(), suite);
@@ -133,20 +141,43 @@ public final class WopClient {
     }
 
     /**
-     * 一站式：签名 → 发送 → 非 2xx 拦截 → 验签解密（§2 execute 语义，P0 单参）。
+     * 一站式：签名 → 发送 → 非 2xx 拦截 → 验签解密（§2 execute 语义）。
      */
     public VerifyResult execute(String method, String path, byte[] body, SecurityLevel level) {
+        return execute(method, path, body, level, WopRequestOptions.none());
+    }
+
+    /**
+     * 带请求级覆盖的一站式入口（§6/K24）：合并后出/入向凭证与 Failover 候选同源。
+     */
+    public VerifyResult execute(String method, String path, byte[] body, SecurityLevel level,
+                                WopRequestOptions options) {
         if (transport == null) {
             throw WopError.configuration("execute 需要经 fromConfig/defaultClient 构造的客户端");
         }
         ConfigUrlUtils.validateApiPath(path);
-        RequestDraft draft = buildRequest(method, path, body, level);
-        TransportResponse response = transport.send(draft);
+        if (sdkConfig == null) {
+            if (options != null && options != WopRequestOptions.none()) {
+                throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
+            }
+            RequestDraft draft = buildRequest(method, path, body, level);
+            TransportResponse response = transport.send(draft);
+            return finishExecute(response, draft, null);
+        }
+        WopRequestContext ctx = resolveContext(options);
+        RequestDraft draft = buildRequestInternal(method, path, body, level, ctx.outbound());
+        Transport sending = new FailoverTransport(transport, ctx);
+        TransportResponse response = sending.send(draft, ctx.toTransportCall());
+        return finishExecute(response, draft, ctx.inbound());
+    }
+
+    private VerifyResult finishExecute(TransportResponse response, RequestDraft draft,
+                                         WopRequestContext.Inbound inbound) {
         int status = response.statusCode();
         if (status < 200 || status >= 300) {
             throw new WopGatewayResponseException(status, response.body());
         }
-        return verifyResponse(response, draft);
+        return verifyInbound(response.headers(), response.body(), draft.path(), inbound);
     }
 
     // ==================== 出向 ====================
@@ -160,6 +191,25 @@ public final class WopClient {
      * @param level  L0 明文 / L2 数字信封（L2 需要非空 body）
      */
     public RequestDraft buildRequest(String method, String path, byte[] body, SecurityLevel level) {
+        return buildRequest(method, path, body, level, WopRequestOptions.none());
+    }
+
+    /**
+     * 带请求级覆盖的出向构造（K24）；未设置字段沿用全局配置。
+     */
+    public RequestDraft buildRequest(String method, String path, byte[] body, SecurityLevel level,
+                                     WopRequestOptions options) {
+        if (options == null || options == WopRequestOptions.none()) {
+            return buildRequestInternal(method, path, body, level, null);
+        }
+        if (sdkConfig == null) {
+            throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
+        }
+        return buildRequestInternal(method, path, body, level, resolveContext(options).outbound());
+    }
+
+    private RequestDraft buildRequestInternal(String method, String path, byte[] body, SecurityLevel level,
+                                              WopRequestContext.Outbound outbound) {
         if (method == null || method.trim().isEmpty()) {
             throw WopError.configuration("HTTP method 为空");
         }
@@ -173,48 +223,48 @@ public final class WopClient {
             throw WopError.configuration("L2 加密需要非空 body");
         }
 
+        AlgorithmSuite effectiveSuite = outbound != null ? outbound.suite() : suite;
+        PrivateKey effectiveMerchantKey = outbound != null ? outbound.merchantPrivateKey() : merchantPrivateKey;
+        PublicKey effectivePlatformKey = outbound != null ? outbound.platformPublicKey() : platformPublicKey;
+        String effectiveAppKey = outbound != null ? outbound.appKey() : config.appKey();
+        long effectiveExpired = outbound != null ? outbound.expiredSeconds() : config.expiredSeconds();
+
         byte[] wireBody = body;
         if (!hasBody) {
             wireBody = null;   // 无 body 统一为 null（空数组归一，D2）
         }
         Map<String, String> headers = new LinkedHashMap<>();
-        headers.put(HEADER_APPKEY, config.appKey());
+        headers.put(HEADER_APPKEY, effectiveAppKey);
         headers.put(HEADER_TIMESTAMP, Long.toString(clock.getAsLong()));
         headers.put(HEADER_NONCE, nonceGen.get());
 
         if (level == SecurityLevel.L2) {
-            // F5：DEK key 由 CSPRNG 生成；IV 由策略唯一生成点产出（I4），随密文同源携带。
-            // 随机流消费顺序（interop 合同）：[CEK][IV][wrap 填充随机（OAEP seed/SM2 k）]
-            byte[] dekKey = new byte[suite.messageEncrypt().keyLength()];
+            byte[] dekKey = new byte[effectiveSuite.messageEncrypt().keyLength()];
             random.nextBytes(dekKey);
-            CipherResult result = suite.messageEncrypt().encrypt(body, dekKey, random);
+            CipherResult result = effectiveSuite.messageEncrypt().encrypt(body, dekKey, random);
             wireBody = EncryptedEnvelope.wrap(Codec.b64UrlEncode(result.cipher()));
             String dekPayload = DekPayload.encode(
-                    new DekPayload(suite.expectedDekAlg(), dekKey, result.iv()));
-            byte[] wrapped = suite.keyEncrypt().encrypt(Codec.utf8(dekPayload), platformPublicKey, random);
+                    new DekPayload(effectiveSuite.expectedDekAlg(), dekKey, result.iv()));
+            byte[] wrapped = effectiveSuite.keyEncrypt().encrypt(Codec.utf8(dekPayload),
+                    effectivePlatformKey, random);
             headers.put(HEADER_ENCRYPT, EncryptHeader.buildL2(Codec.b64UrlEncode(wrapped)));
         }
 
         if (wireBody != null) {
-            // 不变量：hasBody=false 时 wireBody 已归一为 null，非 null 即非空（D2）
-            headers.put(HEADER_DIGEST, ContentDigest.build(suite, wireBody));
+            headers.put(HEADER_DIGEST, ContentDigest.build(effectiveSuite, wireBody));
         }
 
-        // signedHeaders = 参与签名的头按名称 ASCII 升序（appkey 基础 + 有 body 必含 digest（I1）
-        // + 加密必含 x-wop-encrypt + nonce/timestamp）
         java.util.SortedSet<String> signedNames = new java.util.TreeSet<>();
         for (String name : headers.keySet()) {
-            // headers 白名单恒为签名头（appkey/timestamp/nonce[/digest][/encrypt]），全部参与签名
             signedNames.add(name);
         }
         List<String> signedHeaders = Collections.unmodifiableList(new ArrayList<>(signedNames));
-        String authString = SignHeader.PROTOCOL_VERSION + "/" + config.expiredSeconds();
+        String authString = SignHeader.PROTOCOL_VERSION + "/" + effectiveExpired;
         String canonical = CanonicalRequest.build(authString, upperMethod, path, "",
                 CanonicalRequest.canonicalHeaders(subMap(headers, signedHeaders)));
-        // D14：SM2 出向签名 userId = 请求身份（x-wop-appkey）；RSA 忽略
-        byte[] signature = suite.signature().sign(Codec.utf8(canonical), merchantPrivateKey,
-                Codec.utf8(config.appKey()));
-        headers.put(HEADER_SIGN, SignHeader.build(suite.securityReq(), config.expiredSeconds(),
+        byte[] signature = effectiveSuite.signature().sign(Codec.utf8(canonical), effectiveMerchantKey,
+                Codec.utf8(effectiveAppKey));
+        headers.put(HEADER_SIGN, SignHeader.build(effectiveSuite.securityReq(), effectiveExpired,
                 signedHeaders, Codec.b64UrlEncode(signature)));
 
         return new RequestDraft(upperMethod, path, headers, wireBody);
@@ -224,21 +274,73 @@ public final class WopClient {
 
     /** 校验网关响应（canonical URI = 原请求路径；无路径无法重建 canonical，必须显式提供）。 */
     public VerifyResult verifyResponse(Map<String, String> headers, byte[] body, String requestPath) {
-        return verifyInbound(headers, body, requestPath);
+        return verifyResponse(headers, body, requestPath, WopRequestOptions.none());
+    }
+
+    /**
+     * 带请求级覆盖的响应验签（K24）；仅消费入向凭证字段。
+     */
+    public VerifyResult verifyResponse(Map<String, String> headers, byte[] body, String requestPath,
+                                       WopRequestOptions options) {
+        return verifyInboundWithOptions(headers, body, requestPath, options);
     }
 
     /** 校验 SDK 发送流程的响应（路径取自草稿）。 */
     public VerifyResult verifyResponse(TransportResponse response, RequestDraft draft) {
-        return verifyInbound(response.headers(), response.body(), draft.path());
+        return verifyResponse(response, draft, WopRequestOptions.none());
+    }
+
+    /** 带请求级覆盖的响应验签（路径取自草稿）。 */
+    public VerifyResult verifyResponse(TransportResponse response, RequestDraft draft,
+                                       WopRequestOptions options) {
+        return verifyInboundWithOptions(response.headers(), response.body(), draft.path(), options);
     }
 
     /** 校验平台回调（canonical URI = 回调 path）。 */
     public VerifyResult verifyCallback(Map<String, String> headers, byte[] body, String callbackPath) {
-        return verifyInbound(headers, body, callbackPath);
+        return verifyCallback(headers, body, callbackPath, WopRequestOptions.none());
+    }
+
+    /**
+     * 平台回调验签 + 凭证覆盖（K10）：仅消费 options 中凭证字段，超时/域名字段忽略。
+     */
+    public VerifyResult verifyCallback(Map<String, String> headers, byte[] body, String callbackPath,
+                                       WopRequestOptions options) {
+        if (options == null || options == WopRequestOptions.none()) {
+            return verifyInbound(headers, body, callbackPath, null);
+        }
+        if (sdkConfig == null) {
+            throw WopError.configuration("verifyCallback 凭证覆盖需要经 fromConfig 构造的客户端");
+        }
+        return verifyInboundWithOptions(headers, body, callbackPath, options);
+    }
+
+    private VerifyResult verifyInboundWithOptions(Map<String, String> headers, byte[] body, String path,
+                                                  WopRequestOptions options) {
+        if (options == null || options == WopRequestOptions.none()) {
+            return verifyInbound(headers, body, path, null);
+        }
+        if (sdkConfig == null) {
+            throw WopError.configuration("凭证覆盖需要经 fromConfig 构造的客户端");
+        }
+        WopRequestContext ctx = WopRequestContext.resolveInboundOnly(sdkConfig, options);
+        return verifyInbound(headers, body, path, ctx.inbound());
+    }
+
+    private WopRequestContext resolveContext(WopRequestOptions options) {
+        if (options == null || options == WopRequestOptions.none()) {
+            return defaultRequestContext;
+        }
+        return WopRequestContext.resolve(sdkConfig, options);
     }
 
     /** 入向统一实现（F6 固定顺序：验签 → digest 复核 → DEK 解包 → alg 族比对 → bulk 解密）；永不抛异常。 */
-    private VerifyResult verifyInbound(Map<String, String> headers, byte[] body, String path) {
+    private VerifyResult verifyInbound(Map<String, String> headers, byte[] body, String path,
+                                       WopRequestContext.Inbound inbound) {
+        AlgorithmSuite clientSuite = inbound != null ? inbound.suite() : suite;
+        PublicKey verifyKey = inbound != null ? inbound.platformPublicKey() : platformPublicKey;
+        PrivateKey decryptKey = inbound != null ? inbound.merchantPrivateKey() : merchantPrivateKey;
+
         Map<String, String> lower = lowerCase(headers);
 
         // 1. 签名头存在性与格式（解析类，明确）
@@ -260,9 +362,10 @@ public final class WopClient {
         } catch (WopSuiteException e) {
             return VerifyResult.fail(VerifyResult.Reason.UNSUPPORTED_SUITE, e.getMessage());
         }
-        if (!inboundSuite.securityReq().equals(suite.securityReq())) {
+        if (!inboundSuite.securityReq().equals(clientSuite.securityReq())) {
             return VerifyResult.fail(VerifyResult.Reason.SUITE_MISMATCH,
-                    "响应声明 " + inboundSuite.securityReq() + " 与客户端配置 " + suite.securityReq() + " 不符");
+                    "响应声明 " + inboundSuite.securityReq() + " 与客户端配置 "
+                            + clientSuite.securityReq() + " 不符");
         }
 
         // 3. 加密指令（解析类，明确；头缺席 = L0）
@@ -318,7 +421,7 @@ public final class WopClient {
         try {
             // D14：入向验签 userId = 平台协议固定值（与 Go 参考实现 sm2PlatformUserID 一致，仅入向）
             verified = inboundSuite.signature().verify(Codec.utf8(canonical), signature,
-                    platformPublicKey, PLATFORM_SIGN_USER_ID);
+                    verifyKey, PLATFORM_SIGN_USER_ID);
         } catch (RuntimeException e) {
             verified = false;
         }
@@ -347,7 +450,7 @@ public final class WopClient {
         }
         byte[] dekPlain;
         try {
-            dekPlain = inboundSuite.keyEncrypt().decrypt(Codec.b64UrlDecode(encrypt.dek()), merchantPrivateKey);
+            dekPlain = inboundSuite.keyEncrypt().decrypt(Codec.b64UrlDecode(encrypt.dek()), decryptKey);
         } catch (RuntimeException e) {
             return VerifyResult.fail(VerifyResult.Reason.DECRYPT_FAILED, null);
         }
@@ -472,6 +575,10 @@ public final class WopClient {
         private String merchantPrivateKey;
         private String platformPublicKey;
         private long expiredSeconds = DEFAULT_EXPIRED_SECONDS;
+        private String serverRoot;
+        private List<String> backupServerRoots = Collections.emptyList();
+        private HttpClientSettings httpClient = HttpClientSettings.defaults();
+        private Transport transport;
 
         /** 商户 appKey（x-wop-appkey，必填）。 */
         public Builder appKey(String appKey) {
@@ -503,6 +610,31 @@ public final class WopClient {
             return this;
         }
 
+        /** 主网关根地址（HTTPS 绝对 URL，含 context-path；设置后走 {@link #fromConfig} 路径，K11）。 */
+        public Builder serverRoot(String serverRoot) {
+            this.serverRoot = serverRoot;
+            return this;
+        }
+
+        /** 备用网关根地址（有序，仅全局）。 */
+        public Builder backupServerRoots(String... backupServerRoots) {
+            this.backupServerRoots = backupServerRoots == null
+                    ? Collections.emptyList() : Arrays.asList(backupServerRoots);
+            return this;
+        }
+
+        /** HTTP 客户端全局参数。 */
+        public Builder httpClient(HttpClientSettings httpClient) {
+            this.httpClient = httpClient == null ? HttpClientSettings.defaults() : httpClient;
+            return this;
+        }
+
+        /** 可选注入传输；缺省时 {@link #fromConfig} 走 SPI 发现。 */
+        public Builder transport(Transport transport) {
+            this.transport = transport;
+            return this;
+        }
+
         /** 构造客户端：必填项与套件 fail-fast 校验，密钥按套件族即时解析（非法抛 {@link WopError}，configuration 类）。 */
         public WopClient build() {
             if (appKey == null || appKey.trim().isEmpty()) {
@@ -526,7 +658,20 @@ public final class WopClient {
             if (platformPublicKey == null || platformPublicKey.trim().isEmpty()) {
                 throw WopError.configuration("platformPublicKey 为空");
             }
-            // fail-fast：密钥按套件族解析（D12 格式、长度一致性在 KeyCodec 内校验）
+            if (serverRoot != null && !serverRoot.trim().isEmpty()) {
+                WopSdkConfig config = new WopSdkConfig.Builder()
+                        .appKey(appKey)
+                        .suite(suite)
+                        .merchantPrivateKey(merchantPrivateKey)
+                        .platformPublicKey(platformPublicKey)
+                        .serverRoot(serverRoot)
+                        .backupServerRoots(backupServerRoots)
+                        .expiredSeconds(expiredSeconds)
+                        .httpClient(httpClient)
+                        .transport(transport)
+                        .build();
+                return fromConfig(config);
+            }
             return new WopClient(new Config(appKey, parsed, merchantPrivateKey, platformPublicKey, expiredSeconds),
                     System::currentTimeMillis, defaultNonceSupplier());
         }

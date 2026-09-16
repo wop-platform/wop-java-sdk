@@ -2,8 +2,10 @@ package com.wanlianyida.wop.unirest;
 
 import com.wanlianyida.wop.RequestDraft;
 import com.wanlianyida.wop.Transport;
+import com.wanlianyida.wop.TransportCall;
 import com.wanlianyida.wop.TransportResponse;
 import com.wanlianyida.wop.WopSdkException;
+import com.wanlianyida.wop.config.ConfigUrlUtils;
 import kong.unirest.core.Config;
 import kong.unirest.core.Header;
 import kong.unirest.core.Headers;
@@ -28,6 +30,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * unirest 依赖 scope=provided（商户自带版本）；baseUrl 为空时要求 draft.path 为绝对 URL。
  * 响应体经 {@link RawResponse#getContent()} 流式限量读取（thenConsume），不使用 {@code asBytes()} 全量缓冲。
+ * <p>
+ * K9：{@code connectTimeout} 为 {@link UnirestInstance} 实例级，请求级 {@link com.wanlianyida.wop.TransportCall}
+ * 的 connect 覆盖不生效；{@code readTimeout} 可按请求 {@code requestTimeout} 设置。
  */
 public final class UnirestTransport implements Transport {
 
@@ -57,7 +62,15 @@ public final class UnirestTransport implements Transport {
 
     @Override
     public TransportResponse send(RequestDraft draft) {
-        HttpRequestWithBody request = unirest.request(draft.method(), resolve(draft));
+        return send(draft, TransportCall.empty());
+    }
+
+    @Override
+    public TransportResponse send(RequestDraft draft, TransportCall call) {
+        HttpRequestWithBody request = unirest.request(draft.method(), resolve(draft, call));
+        if (call != null && call.readTimeoutMillis() > 0) {
+            request = request.requestTimeout(call.readTimeoutMillis());
+        }
         draft.headers().forEach(request::header);
         byte[] wire = draft.wireBody();
         // body 存在于 body() 返回的 RequestBodyEntity（包装对象）中，后续执行必须走该引用
@@ -212,9 +225,12 @@ public final class UnirestTransport implements Transport {
         }
     }
 
-    private String resolve(RequestDraft draft) {
+    private String resolve(RequestDraft draft, TransportCall call) {
+        if (call != null && call.serverRoot() != null && !call.serverRoot().isEmpty()) {
+            return ConfigUrlUtils.joinUrl(call.serverRoot(), draft.path());
+        }
         String path = draft.path();
-        if (path.startsWith("http")) {   // http:/ 与 https:// 同判
+        if (path.startsWith("http")) {
             return path;
         }
         if (baseUrl == null) {

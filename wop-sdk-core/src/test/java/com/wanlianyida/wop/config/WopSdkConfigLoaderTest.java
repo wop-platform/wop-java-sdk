@@ -114,6 +114,51 @@ class WopSdkConfigLoaderTest {
     }
 
     @Test
+    void validateApiPathRejectsAbsoluteUrlAndQuery() {
+        WopError abs = assertThrows(WopError.class,
+                () -> ConfigUrlUtils.validateApiPath("http://evil.example/path"));
+        assertTrue(abs.getMessage().contains("须以 / 开头") || abs.getMessage().contains("绝对 URL"));
+        WopError query = assertThrows(WopError.class,
+                () -> ConfigUrlUtils.validateApiPath("/gateway/x?a=1"));
+        assertTrue(query.getMessage().contains("query"));
+    }
+
+    @Test
+    void validateGatewayUrlRejectsQueryAndFragment() {
+        WopError query = assertThrows(WopError.class, () -> ConfigUrlUtils.validateGatewayUrl(
+                "https://gw.example.com/gateway?x=1", "serverRoot"));
+        assertTrue(query.getMessage().contains("query"));
+        WopError fragment = assertThrows(WopError.class, () -> ConfigUrlUtils.validateGatewayUrl(
+                "https://gw.example.com/gateway#x", "serverRoot"));
+        assertTrue(fragment.getMessage().contains("fragment"));
+    }
+
+    @Test
+    void parseStripsBomAndRejectsEmptyFile() throws Exception {
+        Path file = tempDir.resolve("bom.json");
+        Files.write(file, ("\uFEFF" + validConfigJson(null)).getBytes(StandardCharsets.UTF_8));
+        assertEquals("app_001", WopSdkConfigLoader.load(file).appKey());
+        Path empty = tempDir.resolve("empty.json");
+        Files.write(empty, "   ".getBytes(StandardCharsets.UTF_8));
+        WopError error = assertThrows(WopError.class, () -> WopSdkConfigLoader.load(empty));
+        assertTrue(error.getMessage().contains("空文件"));
+    }
+
+    @Test
+    void nanInHttpClientFailsFast() {
+        WopError error = assertThrows(WopError.class, () -> ConfigJsonParser.parse(
+                "{\"appKey\":\"a\",\"suite\":\"WOP-RSA3072-SHA256\","
+                        + "\"merchantPrivateKey\":\"" + RSA_PRIV + "\","
+                        + "\"platformPublicKey\":\"" + RSA_PUB + "\","
+                        + "\"serverRoot\":\"https://gw.example.com/gateway\","
+                        + "\"httpClient\":{\"connectTimeout\":NaN,\"readTimeout\":30000,\"maxRetryCount\":3}"
+                        + "}"));
+        assertTrue(error.getMessage().contains("JSON 解析失败")
+                || error.getMessage().contains("NaN")
+                || error.getMessage().contains("类型非法"));
+    }
+
+    @Test
     void joinUrlPreservesContextPath() {
         String url = ConfigUrlUtils.joinUrl("https://gw.example.com/gateway", "/gateway/order/create");
         assertEquals("https://gw.example.com/gateway/gateway/order/create", url);
