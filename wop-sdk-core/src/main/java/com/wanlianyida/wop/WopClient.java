@@ -10,6 +10,9 @@ import com.wanlianyida.wop.crypto.EncryptHeader;
 import com.wanlianyida.wop.crypto.KeyCodec;
 import com.wanlianyida.wop.crypto.SignHeader;
 import com.wanlianyida.wop.crypto.WopSuiteException;
+import com.wanlianyida.wop.config.ConfigUrlUtils;
+import com.wanlianyida.wop.config.WopSdkConfig;
+import com.wanlianyida.wop.config.WopSdkConfigLoader;
 import com.wanlianyida.wop.crypto.strategies.CipherResult;
 
 import java.nio.charset.StandardCharsets;
@@ -48,7 +51,14 @@ public final class WopClient {
     /** 平台响应签名 userId（协议固定值，与 Go 参考实现 sm2PlatformUserID 一致；仅入向验签使用，
      *  非出向默认回退——出向恒为 x-wop-appkey 头值，D14）。 */
     private static final byte[] PLATFORM_SIGN_USER_ID = "1234567812345678".getBytes(StandardCharsets.UTF_8);
+
+    /** 默认客户端缓存（K15/K26）。 */
+    private static volatile WopClient defaultClientInstance;
+    private static final Object DEFAULT_CLIENT_LOCK = new Object();
+
     private final Config config;
+    private final WopSdkConfig sdkConfig;
+    private final Transport transport;
     private final AlgorithmSuite suite;
     private final PrivateKey merchantPrivateKey;
     private final PublicKey platformPublicKey;
@@ -58,12 +68,19 @@ public final class WopClient {
 
     /** 测试便捷构造（随机源退默认 CSPRNG）。 */
     WopClient(Config config, LongSupplier clock, Supplier<String> nonceGen) {
-        this(config, clock, nonceGen, new SecureRandom());
+        this(config, null, null, clock, nonceGen, new SecureRandom());
     }
 
     /** 全量确定性钩子（interop 联调合同）：时钟/nonce/随机源可注入；生产走 Builder 默认 CSPRNG。 */
     WopClient(Config config, LongSupplier clock, Supplier<String> nonceGen, SecureRandom random) {
+        this(config, null, null, clock, nonceGen, random);
+    }
+
+    private WopClient(Config config, WopSdkConfig sdkConfig, Transport transport,
+                      LongSupplier clock, Supplier<String> nonceGen, SecureRandom random) {
         this.config = config;
+        this.sdkConfig = sdkConfig;
+        this.transport = transport;
         this.suite = config.suite();
         this.merchantPrivateKey = KeyCodec.parsePrivateKey(config.merchantPrivateKey(), suite);
         this.platformPublicKey = KeyCodec.parsePublicKey(config.platformPublicKey(), suite);
@@ -75,6 +92,61 @@ public final class WopClient {
     /** 创建 {@link Builder}。 */
     public static Builder builder() {
         return new Builder();
+    }
+
+    /** 惰性：loadDefault → 传输发现 → 构造；缓存复用（K15）。 */
+    public static WopClient defaultClient() {
+        WopClient local = defaultClientInstance;
+        if (local != null) {
+            return local;
+        }
+        synchronized (DEFAULT_CLIENT_LOCK) {
+            if (defaultClientInstance == null) {
+                defaultClientInstance = fromConfig(WopSdkConfigLoader.loadDefault());
+            }
+            return defaultClientInstance;
+        }
+    }
+
+    /** 显式配置构造（不进默认实例缓存，K11）。 */
+    public static WopClient fromConfig(WopSdkConfig config) {
+        Objects.requireNonNull(config, "config");
+        Transport resolvedTransport = config.transport();
+        if (resolvedTransport == null) {
+            resolvedTransport = TransportFactory.discover().create(config.serverRoot());
+        }
+        Config clientConfig = new Config(
+                config.appKey(),
+                AlgorithmSuite.parse(config.suite()),
+                config.merchantPrivateKey(),
+                config.platformPublicKey(),
+                config.expiredSeconds());
+        return new WopClient(clientConfig, config, resolvedTransport,
+                System::currentTimeMillis, defaultNonceSupplier(), new SecureRandom());
+    }
+
+    /** 丢弃默认实例与初始化状态（轮换须先 {@link WopSdkConfigLoader#clearCache()}，K26）。 */
+    public static void resetDefault() {
+        synchronized (DEFAULT_CLIENT_LOCK) {
+            defaultClientInstance = null;
+        }
+    }
+
+    /**
+     * 一站式：签名 → 发送 → 非 2xx 拦截 → 验签解密（§2 execute 语义，P0 单参）。
+     */
+    public VerifyResult execute(String method, String path, byte[] body, SecurityLevel level) {
+        if (transport == null) {
+            throw WopError.configuration("execute 需要经 fromConfig/defaultClient 构造的客户端");
+        }
+        ConfigUrlUtils.validateApiPath(path);
+        RequestDraft draft = buildRequest(method, path, body, level);
+        TransportResponse response = transport.send(draft);
+        int status = response.statusCode();
+        if (status < 200 || status >= 300) {
+            throw new WopGatewayResponseException(status, response.body());
+        }
+        return verifyResponse(response, draft);
     }
 
     // ==================== 出向 ====================
@@ -91,9 +163,7 @@ public final class WopClient {
         if (method == null || method.trim().isEmpty()) {
             throw WopError.configuration("HTTP method 为空");
         }
-        if (path == null || path.trim().isEmpty()) {
-            throw WopError.configuration("请求路径为空");
-        }
+        ConfigUrlUtils.validateApiPath(path);
         if (level == null) {
             throw WopError.configuration("SecurityLevel 为空（L0|L2）");
         }
@@ -369,9 +439,9 @@ public final class WopClient {
 
         @Override
         public String toString() {
+            // K16：凭证字段打码
             return "Config[appKey=" + appKey + ", suite=" + suite
-                    + ", merchantPrivateKey=" + merchantPrivateKey
-                    + ", platformPublicKey=" + platformPublicKey
+                    + ", merchantPrivateKey=****, platformPublicKey=****"
                     + ", expiredSeconds=" + expiredSeconds + "]";
         }
     }
