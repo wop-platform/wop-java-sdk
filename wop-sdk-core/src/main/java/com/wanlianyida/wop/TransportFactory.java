@@ -70,9 +70,6 @@ public interface TransportFactory {
                     + TransportFactory.class.getName()
                     + "）；请引入 wop-sdk-jdkhttp / wop-sdk-okhttp / wop-sdk-unirest 传输模块之一");
         }
-        if (found.size() == 1) {
-            return found.get(0);
-        }
         List<String> names = new ArrayList<>();
         for (TransportFactory factory : found) {
             try {
@@ -92,6 +89,9 @@ public interface TransportFactory {
             }
             throw WopError.configuration("wop.transport=" + explicit + " 无匹配 factory；可用: "
                     + String.join(", ", names));
+        }
+        if (found.size() == 1) {
+            return found.get(0);
         }
         for (TransportFactory factory : found) {
             if ("jdkhttp".equalsIgnoreCase(factory.name())) {

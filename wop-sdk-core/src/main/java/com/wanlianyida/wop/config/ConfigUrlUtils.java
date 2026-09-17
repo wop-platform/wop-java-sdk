@@ -29,6 +29,9 @@ public final class ConfigUrlUtils {
         if (parsed.getQuery() != null || parsed.getFragment() != null) {
             throw WopError.configuration(fieldName + " 不得含 query 或 fragment: " + trimmed);
         }
+        if (parsed.getUserInfo() != null && !parsed.getUserInfo().isEmpty()) {
+            throw WopError.configuration(fieldName + " 不得含 user-info: " + trimmed);
+        }
         if (parsed.getHost() == null || parsed.getHost().isEmpty()) {
             throw WopError.configuration(fieldName + " 不是合法 URL: " + trimmed);
         }

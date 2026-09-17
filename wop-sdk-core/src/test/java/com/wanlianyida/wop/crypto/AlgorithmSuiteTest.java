@@ -1,14 +1,35 @@
 package com.wanlianyida.wop.crypto;
 
+import com.wanlianyida.wop.crypto.strategies.RsaOaepKeyEncryptStrategy;
+import com.wanlianyida.wop.crypto.strategies.RsaPkcs1SignatureStrategy;
 import org.junit.jupiter.api.Test;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.Base64;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * F1 套件配置与解析：三套件全支持，跨族/非法拒绝（crypto spec §2）。
+ * F1 套件配置与解析：四 RSA/SM2 套件全支持，跨族/非法拒绝（crypto spec §2）。
  */
 class AlgorithmSuiteTest {
+
+    @Test
+    void parsesRsa2048Suite() {
+        AlgorithmSuite suite = AlgorithmSuite.parse("WOP-RSA2048-SHA256");
+        assertEquals("WOP-RSA2048-SHA256", suite.securityReq());
+        assertEquals("RSA", suite.keyAlgorithm());
+        assertEquals(2048, suite.keyLength());
+        assertEquals(256, suite.signatureLength());
+        assertEquals("SHA256", suite.digestAlgorithm());
+        assertEquals("sha-256", suite.digestLabel());
+        assertEquals("AES-256-GCM", suite.expectedDekAlg());
+        assertEquals("SHA256withRSA", suite.signature().algorithmName());
+    }
 
     @Test
     void parsesRsa3072Suite() {
@@ -83,9 +104,30 @@ class AlgorithmSuiteTest {
 
     @Test
     void rejectsUnsupportedAlgorithms() {
-        assertThrows(WopSuiteException.class, () -> AlgorithmSuite.parse("WOP-RSA2048-SHA256"));
+        assertThrows(WopSuiteException.class, () -> AlgorithmSuite.parse("WOP-RSA1024-SHA256"));
         assertThrows(WopSuiteException.class, () -> AlgorithmSuite.parse("WOP-RSA3072-SHA384"));
         assertThrows(WopSuiteException.class, () -> AlgorithmSuite.parse("WOP-ED25519-SHA256"));
+    }
+
+    @Test
+    void rsa2048SignEncryptRoundtripWithGeneratedKeys() throws Exception {
+        AlgorithmSuite suite = AlgorithmSuite.parse("WOP-RSA2048-SHA256");
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+        String privB64 = Base64.getEncoder().encodeToString(kp.getPrivate().getEncoded());
+        String pubB64 = Base64.getEncoder().encodeToString(kp.getPublic().getEncoded());
+        var priv = KeyCodec.parsePrivateKey(privB64, suite);
+        var pub = KeyCodec.parsePublicKey(pubB64, suite);
+
+        byte[] msg = Codec.utf8("rsa2048 roundtrip");
+        byte[] sig = RsaPkcs1SignatureStrategy.INSTANCE.sign(msg, priv, Codec.utf8("app_001"));
+        assertEquals(256, sig.length);
+        assertTrue(RsaPkcs1SignatureStrategy.INSTANCE.verify(msg, sig, pub, Codec.utf8("app_001")));
+
+        byte[] dek = Codec.utf8("AES-256-GCM$k$iv");
+        byte[] wrapped = RsaOaepKeyEncryptStrategy.INSTANCE.encrypt(dek, pub);
+        assertArrayEquals(dek, RsaOaepKeyEncryptStrategy.INSTANCE.decrypt(wrapped, priv));
     }
 
     @Test

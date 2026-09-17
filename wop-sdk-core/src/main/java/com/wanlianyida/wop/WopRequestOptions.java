@@ -116,6 +116,13 @@ public final class WopRequestOptions {
         return readTimeout > 0;
     }
 
+    /** 是否无任何有效覆盖（与 {@link #none()} 值等价）。 */
+    public boolean isEmpty() {
+        return !hasAppKey() && !hasSuite() && !hasMerchantPrivateKey()
+                && !hasPlatformPublicKey() && !hasExpiredSeconds()
+                && !hasServerRoot() && !hasConnectTimeout() && !hasReadTimeout();
+    }
+
     public static final class Builder {
 
         private String appKey;
@@ -148,6 +155,9 @@ public final class WopRequestOptions {
         }
 
         public Builder expiredSeconds(long expiredSeconds) {
+            if (expiredSeconds < 0) {
+                throw WopError.configuration("expiredSeconds 不能为负数");
+            }
             this.expiredSeconds = expiredSeconds;
             return this;
         }
@@ -158,11 +168,17 @@ public final class WopRequestOptions {
         }
 
         public Builder connectTimeout(int connectTimeout) {
+            if (connectTimeout < 0) {
+                throw WopError.configuration("connectTimeout 不能为负数");
+            }
             this.connectTimeout = connectTimeout;
             return this;
         }
 
         public Builder readTimeout(int readTimeout) {
+            if (readTimeout < 0) {
+                throw WopError.configuration("readTimeout 不能为负数");
+            }
             this.readTimeout = readTimeout;
             return this;
         }

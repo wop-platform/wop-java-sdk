@@ -27,7 +27,6 @@ public final class WopSdkConfigLoader {
 
     private static final String CLASSPATH_PREFIX = "classpath:";
     private static final String PACKAGED_CONFIG = "config/wopSdkConfig.json";
-    private static final String PACKAGED_DEFAULT = "config/wopSdkConfigDefault.json";
 
     private static final Object CACHE_LOCK = new Object();
     private static final Map<String, WopSdkConfig> CACHE = new LinkedHashMap<>();
@@ -135,7 +134,6 @@ public final class WopSdkConfigLoader {
         out.add(fileCandidate(Paths.get(home, ".wop", "wopSdkConfig.json"),
                 "{userHome}/.wop/wopSdkConfig.json", false));
         out.add(classpathCandidate(PACKAGED_CONFIG, PACKAGED_CONFIG));
-        out.add(classpathCandidate(PACKAGED_DEFAULT, PACKAGED_DEFAULT));
         return out;
     }
 

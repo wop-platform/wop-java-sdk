@@ -20,6 +20,25 @@ class WopClientExecuteTest {
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
     private static final String RSA_PUB = TestVectors.keys("rsa3072").path("publicSpkiB64").asText();
 
+    private static Transport stubTransport(TransportResponse response) {
+        return new Transport() {
+            @Override
+            public boolean supportsTransportCall() {
+                return true;
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft draft) {
+                return send(draft, TransportCall.empty());
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft draft, TransportCall call) {
+                return response;
+            }
+        };
+    }
+
     private static WopSdkConfig configWithTransport(Transport transport) {
         return new WopSdkConfig.Builder()
                 .appKey("app_001")
@@ -35,7 +54,8 @@ class WopClientExecuteTest {
 
     @Test
     void redirectStatusDoesNotEnterVerify() {
-        Transport transport = draft -> new TransportResponse(302, Collections.emptyMap(), "moved".getBytes());
+        Transport transport = stubTransport(
+                new TransportResponse(302, Collections.emptyMap(), "moved".getBytes()));
         WopClient client = WopClient.fromConfig(configWithTransport(transport));
         WopGatewayResponseException ex = assertThrows(WopGatewayResponseException.class,
                 () -> client.execute("POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0));
@@ -44,7 +64,8 @@ class WopClientExecuteTest {
 
     @Test
     void non2xxThrowsGatewayException() {
-        Transport transport = draft -> new TransportResponse(502, Collections.emptyMap(), "bad".getBytes());
+        Transport transport = stubTransport(
+                new TransportResponse(502, Collections.emptyMap(), "bad".getBytes()));
         WopClient client = WopClient.fromConfig(configWithTransport(transport));
         WopGatewayResponseException ex = assertThrows(WopGatewayResponseException.class,
                 () -> client.execute("POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0));
@@ -71,6 +92,11 @@ class WopClientExecuteTest {
         AtomicReference<String> seenRoot = new AtomicReference<>();
         Transport transport = new Transport() {
             @Override
+            public boolean supportsTransportCall() {
+                return true;
+            }
+
+            @Override
             public TransportResponse send(RequestDraft draft) {
                 return send(draft, TransportCall.empty());
             }
@@ -86,6 +112,15 @@ class WopClientExecuteTest {
                 "POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0,
                 WopRequestOptions.builder().serverRoot("https://alt.example.com/gateway").build()));
         assertEquals("https://alt.example.com/gateway", seenRoot.get());
+    }
+
+    @Test
+    void executeAcceptsEmptyBuiltOptions() {
+        WopClient client = WopClient.fromConfig(configWithTransport(
+                stubTransport(new TransportResponse(502, Collections.emptyMap(), new byte[0]))));
+        assertThrows(WopGatewayResponseException.class, () -> client.execute(
+                "POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0,
+                WopRequestOptions.builder().build()));
     }
 
     @Test

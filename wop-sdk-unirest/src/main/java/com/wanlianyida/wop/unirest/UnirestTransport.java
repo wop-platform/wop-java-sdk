@@ -61,12 +61,21 @@ public final class UnirestTransport implements Transport {
     }
 
     @Override
+    public boolean supportsTransportCall() {
+        return true;
+    }
+
+    @Override
     public TransportResponse send(RequestDraft draft) {
         return send(draft, TransportCall.empty());
     }
 
     @Override
     public TransportResponse send(RequestDraft draft, TransportCall call) {
+        if (call != null && call.connectTimeoutMillis() > 0) {
+            throw new WopSdkException(
+                    "Unirest 适配器不支持请求级 connectTimeout 覆盖（K9：connectTimeout 为实例级）");
+        }
         HttpRequestWithBody request = unirest.request(draft.method(), resolve(draft, call));
         if (call != null && call.readTimeoutMillis() > 0) {
             request = request.requestTimeout(call.readTimeoutMillis());

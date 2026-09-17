@@ -7,6 +7,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -69,10 +71,22 @@ class WopSdkConfigLoaderDiscoveryTest {
 
     @Test
     void loadClasspathPrefixFromTestResource() throws Exception {
-        Path file = tempDir.resolve("cp.json");
-        Files.write(file, validJson("classpath_load").getBytes(StandardCharsets.UTF_8));
-        WopSdkConfig cfg = WopSdkConfigLoader.load(file);
-        assertEquals("classpath_load", cfg.appKey());
+        Path configDir = tempDir.resolve("config");
+        Files.createDirectories(configDir);
+        Files.write(configDir.resolve("test.json"),
+                validJson("classpath_app").getBytes(StandardCharsets.UTF_8));
+        try (URLClassLoader cl = new URLClassLoader(new URL[]{tempDir.toUri().toURL()},
+                WopSdkConfigLoaderDiscoveryTest.class.getClassLoader())) {
+            Thread current = Thread.currentThread();
+            ClassLoader original = current.getContextClassLoader();
+            current.setContextClassLoader(cl);
+            try {
+                WopSdkConfig cfg = WopSdkConfigLoader.load("classpath:config/test.json");
+                assertEquals("classpath_app", cfg.appKey());
+            } finally {
+                current.setContextClassLoader(original);
+            }
+        }
     }
 
     @Test

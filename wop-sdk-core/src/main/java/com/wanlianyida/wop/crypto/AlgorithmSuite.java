@@ -36,13 +36,17 @@ public final class AlgorithmSuite {
     private static final Map<String, AlgorithmSuite> REGISTRY = buildRegistry();
 
     private static final Set<String> KNOWN_KEY_ALGORITHMS =
-            Collections.unmodifiableSet(new HashSet<>(Arrays.asList("RSA3072", "RSA4096", "SM2")));
+            Collections.unmodifiableSet(new HashSet<>(Arrays.asList("RSA2048", "RSA3072", "RSA4096", "SM2")));
     private static final Set<String> KNOWN_DIGEST_ALGORITHMS =
             Collections.unmodifiableSet(new HashSet<>(Arrays.asList("SHA256", "SM3")));
 
     /** Java 8 兼容注册表装配（保持 Map.of 插入序与不可变语义）。 */
     private static Map<String, AlgorithmSuite> buildRegistry() {
         Map<String, AlgorithmSuite> registry = new LinkedHashMap<>();
+        registry.put("WOP-RSA2048-SHA256", new AlgorithmSuite("WOP-RSA2048-SHA256", "RSA", 2048, "SHA256",
+                "sha-256", "AES-256-GCM",
+                RsaPkcs1SignatureStrategy.INSTANCE, RsaOaepKeyEncryptStrategy.INSTANCE,
+                Aes256GcmStrategy.INSTANCE, Sha256DigestStrategy.INSTANCE));
         registry.put("WOP-RSA3072-SHA256", new AlgorithmSuite("WOP-RSA3072-SHA256", "RSA", 3072, "SHA256",
                 "sha-256", "AES-256-GCM",
                 RsaPkcs1SignatureStrategy.INSTANCE, RsaOaepKeyEncryptStrategy.INSTANCE,
@@ -106,7 +110,7 @@ public final class AlgorithmSuite {
         if (!knownKey || !knownDigest) {
             throw new WopSuiteException(WopSuiteException.Kind.UNSUPPORTED,
                     "不支持的算法: '" + (knownKey ? segments[2] : segments[1])
-                            + "'（密钥算法支持 RSA3072/RSA4096/SM2，摘要算法支持 SHA256/SM3）");
+                            + "'（密钥算法支持 RSA2048/RSA3072/RSA4096/SM2，摘要算法支持 SHA256/SM3）");
         }
         throw new WopSuiteException(WopSuiteException.Kind.UNSUPPORTED,
                 "不支持的算法组合: '" + securityReq + "'（国际密钥配国际摘要、国密密钥配国密摘要，跨族禁止）");
@@ -122,7 +126,7 @@ public final class AlgorithmSuite {
         return keyAlgorithm;
     }
 
-    /** RSA 3072/4096；SM2 为 0（曲线固定 sm2p256v1）。 */
+    /** RSA 2048/3072/4096；SM2 为 0（曲线固定 sm2p256v1）。 */
     public int keyLength() {
         return keyLength;
     }
@@ -148,7 +152,7 @@ public final class AlgorithmSuite {
     }
 
 
-    /** 线上签名定长（F7）：RSA = 密钥位数字节数（3072→384B / 4096→512B）；SM2 = 裸 r‖s 64B（D9）。 */
+    /** 线上签名定长（F7）：RSA = 密钥位数字节数（2048→256B / 3072→384B / 4096→512B）；SM2 = 裸 r‖s 64B（D9）。 */
     public int signatureLength() {
         return "SM2".equals(keyAlgorithm) ? 64 : keyLength / 8;
     }

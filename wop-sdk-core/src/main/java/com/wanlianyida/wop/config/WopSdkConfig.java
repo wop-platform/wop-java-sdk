@@ -2,6 +2,7 @@ package com.wanlianyida.wop.config;
 
 import com.wanlianyida.wop.Transport;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -28,7 +29,7 @@ public final class WopSdkConfig {
         this.merchantPrivateKey = merchantPrivateKey;
         this.platformPublicKey = platformPublicKey;
         this.serverRoot = serverRoot;
-        this.backupServerRoots = Collections.unmodifiableList(backupServerRoots);
+        this.backupServerRoots = Collections.unmodifiableList(new ArrayList<>(backupServerRoots));
         this.expiredSeconds = expiredSeconds;
         this.httpClient = httpClient;
         this.transport = transport;
@@ -150,7 +151,7 @@ public final class WopSdkConfig {
 
         public Builder backupServerRoots(List<String> backupServerRoots) {
             this.backupServerRoots = backupServerRoots == null
-                    ? Collections.emptyList() : backupServerRoots;
+                    ? Collections.emptyList() : new ArrayList<>(backupServerRoots);
             return this;
         }
 

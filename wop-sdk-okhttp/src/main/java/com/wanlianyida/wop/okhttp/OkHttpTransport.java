@@ -53,6 +53,11 @@ public final class OkHttpTransport implements Transport {
     }
 
     @Override
+    public boolean supportsTransportCall() {
+        return true;
+    }
+
+    @Override
     public TransportResponse send(RequestDraft draft) {
         return send(draft, TransportCall.empty());
     }
@@ -101,10 +106,10 @@ public final class OkHttpTransport implements Transport {
     }
 
     private OkHttpClient clientForCall(TransportCall call) {
-        if (call == null || call == TransportCall.empty()) {
-            return client;
-        }
         OkHttpClient.Builder builder = client.newBuilder().followRedirects(false);
+        if (call == null || call == TransportCall.empty()) {
+            return builder.build();
+        }
         if (call.connectTimeoutMillis() > 0) {
             builder.connectTimeout(call.connectTimeoutMillis(), TimeUnit.MILLISECONDS);
         }

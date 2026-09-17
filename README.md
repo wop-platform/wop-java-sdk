@@ -21,7 +21,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 | `wop-sdk-jdkhttp` | `HttpURLConnection` 适配器（零额外依赖、Java 8 floor；仅标准方法集，PATCH 等扩展方法见模块 javadoc） |
 | `wop-sdk-unirest` | Kong Unirest 4.x 适配器（unirest-java-core 依赖 `provided`，商户自带版本；运行时要求 Java 11+，上游 4.x 字节码 major 55） |
 
-支持套件：`WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。
+支持套件：`WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。
 
 ## 配置层一站式接入（wop-sdk-config-spec）
 
@@ -48,6 +48,7 @@ java -Dwop.transport=jdkhttp -jar app.jar
 ```
 
 ```java
+import com.wanlianyida.wop.VerifyResult;
 import com.wanlianyida.wop.WopClient;
 import com.wanlianyida.wop.SecurityLevel;
 
@@ -104,7 +105,7 @@ WopClient client = WopClient.builder()
 ```java
 WopClient client = WopClient.builder()
         .appKey("app_001")
-        .suite("WOP-RSA3072-SHA256")            // 或 WOP-RSA4096-SHA256 / WOP-SM2-SM3
+        .suite("WOP-RSA3072-SHA256")            // 或 WOP-RSA2048/4096-SHA256 / WOP-SM2-SM3
         .merchantPrivateKey(merchantPrivateKey)  // PEM 或 Base64 单行
         .platformPublicKey(platformPublicKey)
         .build();
@@ -131,7 +132,7 @@ if (result.ok()) {
 
 | 套件 | 商户私钥 | 平台公钥 |
 |------|----------|----------|
-| RSA 族 | PKCS#8 DER（PEM `-----BEGIN PRIVATE KEY-----` 或 Base64 单行）；长度须与套件一致（3072/4096） | X.509 SPKI（PEM `-----BEGIN PUBLIC KEY-----` 或 Base64 单行） |
+| RSA 族 | PKCS#8 DER（PEM `-----BEGIN PRIVATE KEY-----` 或 Base64 单行）；长度须与套件一致（2048/3072/4096） | X.509 SPKI（PEM `-----BEGIN PUBLIC KEY-----` 或 Base64 单行） |
 | SM2 族 | d 标量 32 字节（Base64）或 PKCS#8；曲线固定 sm2p256v1 | 未压缩点 `04‖X‖Y` 65 字节（Base64）或 SPKI |
 
 密钥解析在 `build()` 时 fail-fast：格式非法、长度与套件不符、跨族材料均以明确异常拒绝。

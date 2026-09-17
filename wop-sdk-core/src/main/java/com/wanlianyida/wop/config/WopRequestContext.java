@@ -112,7 +112,7 @@ public final class WopRequestContext {
     }
 
     private static WopRequestOptions stripTransportFields(WopRequestOptions options) {
-        if (options == null || options == WopRequestOptions.none()) {
+        if (options == null || options.isEmpty()) {
             return WopRequestOptions.none();
         }
         return WopRequestOptions.builder()
@@ -127,7 +127,7 @@ public final class WopRequestContext {
     /** §6.3 resolve：合并 + 复校验 + 方向性视图。 */
     public static WopRequestContext resolve(WopSdkConfig global, WopRequestOptions options) {
         Objects.requireNonNull(global, "global");
-        if (options == null || options == WopRequestOptions.none()) {
+        if (options == null || options.isEmpty()) {
             return defaultFor(global);
         }
         String appKey = options.hasAppKey() ? options.appKey().trim() : global.appKey();

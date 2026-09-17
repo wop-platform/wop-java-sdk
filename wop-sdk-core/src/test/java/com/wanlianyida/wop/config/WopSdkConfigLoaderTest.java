@@ -171,4 +171,48 @@ class WopSdkConfigLoaderTest {
         assertTrue(text.contains("merchantPrivateKey=****"));
         assertTrue(!text.contains(RSA_PRIV));
     }
+
+    @Test
+    void malformedJsonMissingCommaFailsFast() {
+        WopError error = assertThrows(WopError.class, () -> ConfigJsonParser.parse(
+                "{\"appKey\":\"a\" \"suite\":\"WOP-RSA3072-SHA256\"}"));
+        assertTrue(error.getMessage().contains("JSON 解析失败"));
+    }
+
+    @Test
+    void trailingGarbageAfterRootObjectFailsFast() {
+        WopError error = assertThrows(WopError.class, () -> ConfigJsonParser.parse(
+                validConfigJson(null) + "garbage"));
+        assertTrue(error.getMessage().contains("多余内容"));
+    }
+
+    @Test
+    void maxRetryCountZeroIsAllowed() throws Exception {
+        String json = validConfigJson(null).replace("\"maxRetryCount\":3", "\"maxRetryCount\":0");
+        WopSdkConfig cfg = WopSdkConfigLoader.load(writeConfig(json));
+        assertEquals(0, cfg.httpClient().maxRetryCount());
+    }
+
+    @Test
+    void validateGatewayUrlRejectsUserInfo() {
+        WopError error = assertThrows(WopError.class, () -> ConfigUrlUtils.validateGatewayUrl(
+                "https://user:secret@gateway.example.com/gateway", "serverRoot"));
+        assertTrue(error.getMessage().contains("user-info"));
+    }
+
+    @Test
+    void backupServerRootsListIsImmutableSnapshot() {
+        java.util.List<String> backups = new java.util.ArrayList<>();
+        backups.add("https://gw-backup.example.com/gateway");
+        WopSdkConfig cfg = new WopSdkConfig.Builder()
+                .appKey("app_001")
+                .suite("WOP-RSA3072-SHA256")
+                .merchantPrivateKey(RSA_PRIV)
+                .platformPublicKey(RSA_PUB)
+                .serverRoot("https://gw.example.com/gateway")
+                .backupServerRoots(backups)
+                .build();
+        backups.set(0, "https://evil.example.com/gateway");
+        assertEquals("https://gw-backup.example.com/gateway", cfg.backupServerRoots().get(0));
+    }
 }

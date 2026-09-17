@@ -157,7 +157,7 @@ public final class WopClient {
         }
         ConfigUrlUtils.validateApiPath(path);
         if (sdkConfig == null) {
-            if (options != null && options != WopRequestOptions.none()) {
+            if (options != null && !options.isEmpty()) {
                 throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
             }
             RequestDraft draft = buildRequest(method, path, body, level);
@@ -199,7 +199,7 @@ public final class WopClient {
      */
     public RequestDraft buildRequest(String method, String path, byte[] body, SecurityLevel level,
                                      WopRequestOptions options) {
-        if (options == null || options == WopRequestOptions.none()) {
+        if (options == null || options.isEmpty()) {
             return buildRequestInternal(method, path, body, level, null);
         }
         if (sdkConfig == null) {
@@ -306,7 +306,7 @@ public final class WopClient {
      */
     public VerifyResult verifyCallback(Map<String, String> headers, byte[] body, String callbackPath,
                                        WopRequestOptions options) {
-        if (options == null || options == WopRequestOptions.none()) {
+        if (options == null || options.isEmpty()) {
             return verifyInbound(headers, body, callbackPath, null);
         }
         if (sdkConfig == null) {
@@ -317,7 +317,7 @@ public final class WopClient {
 
     private VerifyResult verifyInboundWithOptions(Map<String, String> headers, byte[] body, String path,
                                                   WopRequestOptions options) {
-        if (options == null || options == WopRequestOptions.none()) {
+        if (options == null || options.isEmpty()) {
             return verifyInbound(headers, body, path, null);
         }
         if (sdkConfig == null) {
@@ -328,7 +328,7 @@ public final class WopClient {
     }
 
     private WopRequestContext resolveContext(WopRequestOptions options) {
-        if (options == null || options == WopRequestOptions.none()) {
+        if (options == null || options.isEmpty()) {
             return defaultRequestContext;
         }
         return WopRequestContext.resolve(sdkConfig, options);
@@ -586,7 +586,7 @@ public final class WopClient {
             return this;
         }
 
-        /** securityReq，如 WOP-RSA3072-SHA256 / WOP-RSA4096-SHA256 / WOP-SM2-SM3。 */
+        /** securityReq，如 WOP-RSA2048-SHA256 / WOP-RSA3072-SHA256 / WOP-RSA4096-SHA256 / WOP-SM2-SM3。 */
         public Builder suite(String securityReq) {
             this.suite = securityReq;
             return this;

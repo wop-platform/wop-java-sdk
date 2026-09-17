@@ -37,7 +37,7 @@ public final class FailoverTransport implements Transport {
             TransportCall attemptCall = mergeCall(call, root);
             attempted++;
             try {
-                return delegate.send(draft, attemptCall);
+                return sendWithDelegate(draft, attemptCall);
             } catch (WopSdkException e) {
                 last = e;
                 if (!isPreSendRetryable(e)) {
@@ -52,6 +52,28 @@ public final class FailoverTransport implements Transport {
             throw wrapExhausted(last, attempted);
         }
         throw new WopSdkException("Failover 无可用网关地址");
+    }
+
+    private TransportResponse sendWithDelegate(RequestDraft draft, TransportCall attemptCall) {
+        if (needsExplicitTransportCall(attemptCall) && !delegate.supportsTransportCall()) {
+            throw WopError.configuration(
+                    "底层 Transport 未实现 send(RequestDraft, TransportCall)，"
+                            + "无法应用 Failover 或请求级网关/超时覆盖");
+        }
+        if (delegate.supportsTransportCall()) {
+            return delegate.send(draft, attemptCall);
+        }
+        return delegate.send(draft);
+    }
+
+    /** 双参 send 才能传递 serverRoot/超时；单参 default 会静默丢弃 attemptCall。 */
+    private static boolean needsExplicitTransportCall(TransportCall attemptCall) {
+        if (attemptCall == null || attemptCall == TransportCall.empty()) {
+            return false;
+        }
+        return attemptCall.serverRoot() != null
+                || attemptCall.connectTimeoutMillis() > 0
+                || attemptCall.readTimeoutMillis() > 0;
     }
 
     private static TransportCall mergeCall(TransportCall call, String serverRoot) {

@@ -56,6 +56,11 @@ public final class JdkHttpTransport implements Transport {
     }
 
     @Override
+    public boolean supportsTransportCall() {
+        return true;
+    }
+
+    @Override
     public TransportResponse send(RequestDraft draft) {
         return send(draft, TransportCall.empty());
     }

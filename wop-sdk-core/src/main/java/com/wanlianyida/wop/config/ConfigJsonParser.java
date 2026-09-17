@@ -28,7 +28,10 @@ final class ConfigJsonParser {
         if (trimmed.isEmpty()) {
             throw WopError.configuration("配置文件 JSON 解析失败: 空文件");
         }
-        return new ConfigJsonParser(trimmed).parseRoot();
+        ConfigJsonParser parser = new ConfigJsonParser(trimmed);
+        WopSdkConfig config = parser.parseRoot();
+        parser.ensureConsumed();
+        return config;
     }
 
     private static String stripBom(String text) {
@@ -78,7 +81,7 @@ final class ConfigJsonParser {
                 default:
                     skipValue();
             }
-            optionalComma();
+            requireCommaOrClose();
         }
         HttpClientSettings defaults = HttpClientSettings.defaults();
         WopSdkConfig raw = new WopSdkConfig(
@@ -106,18 +109,18 @@ final class ConfigJsonParser {
             expect(':');
             switch (key) {
                 case "connectTimeout":
-                    connect = readInt("connectTimeout");
+                    connect = readPositiveInt("connectTimeout");
                     break;
                 case "readTimeout":
-                    read = readInt("readTimeout");
+                    read = readPositiveInt("readTimeout");
                     break;
                 case "maxRetryCount":
-                    maxRetry = readInt("maxRetryCount");
+                    maxRetry = readNonNegativeInt("maxRetryCount");
                     break;
                 default:
                     skipValue();
             }
-            optionalComma();
+            requireCommaOrClose();
         }
         HttpClientSettings defaults = HttpClientSettings.defaults();
         return new HttpClientSettings(
@@ -131,7 +134,7 @@ final class ConfigJsonParser {
         List<String> values = new ArrayList<>();
         while (!tryConsume(']')) {
             values.add(readString());
-            optionalComma();
+            requireCommaOrClose();
         }
         return values;
     }
@@ -216,6 +219,10 @@ final class ConfigJsonParser {
     }
 
     private long readLong(String fieldName) {
+        return readLong(fieldName, true);
+    }
+
+    private long readLong(String fieldName, boolean positiveOnly) {
         skipWhitespace();
         int start = pos;
         if (pos < json.length() && json.charAt(pos) == '-') {
@@ -234,7 +241,10 @@ final class ConfigJsonParser {
         }
         try {
             long value = Long.parseLong(num);
-            if (value <= 0) {
+            if (positiveOnly && value <= 0) {
+                throw WopError.configuration("配置字段 " + fieldName + " 类型非法: " + num);
+            }
+            if (!positiveOnly && value < 0) {
                 throw WopError.configuration("配置字段 " + fieldName + " 类型非法: " + num);
             }
             return value;
@@ -243,8 +253,16 @@ final class ConfigJsonParser {
         }
     }
 
-    private int readInt(String fieldName) {
-        long value = readLong(fieldName);
+    private int readPositiveInt(String fieldName) {
+        long value = readLong(fieldName, true);
+        if (value > Integer.MAX_VALUE) {
+            throw WopError.configuration("配置字段 httpClient 类型非法: 数值越界");
+        }
+        return (int) value;
+    }
+
+    private int readNonNegativeInt(String fieldName) {
+        long value = readLong(fieldName, false);
         if (value > Integer.MAX_VALUE) {
             throw WopError.configuration("配置字段 httpClient 类型非法: 数值越界");
         }
@@ -282,7 +300,7 @@ final class ConfigJsonParser {
             readString();
             expect(':');
             skipValue();
-            optionalComma();
+            requireCommaOrClose();
         }
     }
 
@@ -290,7 +308,7 @@ final class ConfigJsonParser {
         expect('[');
         while (!tryConsume(']')) {
             skipValue();
-            optionalComma();
+            requireCommaOrClose();
         }
     }
 
@@ -322,10 +340,20 @@ final class ConfigJsonParser {
         return false;
     }
 
-    private void optionalComma() {
+    /** 成员之间必须有逗号，或已到对象/数组结束符。 */
+    private void requireCommaOrClose() {
         skipWhitespace();
-        if (pos < json.length() && json.charAt(pos) == ',') {
-            pos++;
+        if (pos < json.length() && (json.charAt(pos) == '}' || json.charAt(pos) == ']')) {
+            return;
+        }
+        expect(',');
+    }
+
+    /** parseRoot 后须消费完输入，拒绝尾随垃圾字符。 */
+    private void ensureConsumed() {
+        skipWhitespace();
+        if (pos < json.length()) {
+            throw syntax("JSON 根对象后存在多余内容");
         }
     }
 

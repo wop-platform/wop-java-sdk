@@ -21,7 +21,7 @@ wire byte formats.
 | `wop-sdk-jdkhttp` | `HttpURLConnection` adapter (zero extra dependencies, Java 8 floor; standard methods only — PATCH and other extension methods are rejected, see module javadoc) |
 | `wop-sdk-unirest` | Kong Unirest 4.x adapter (unirest-java-core dependency is `provided`; bring your own version) |
 
-Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
+Supported suites: `WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
 
 ## Quick Start
 
@@ -55,7 +55,7 @@ Supported suites: `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
 ```java
 WopClient client = WopClient.builder()
         .appKey("app_001")
-        .suite("WOP-RSA3072-SHA256")            // or WOP-RSA4096-SHA256 / WOP-SM2-SM3
+        .suite("WOP-RSA3072-SHA256")            // or WOP-RSA2048/4096-SHA256 / WOP-SM2-SM3
         .merchantPrivateKey(merchantPrivateKey)  // PEM or single-line Base64
         .platformPublicKey(platformPublicKey)
         .build();
@@ -83,7 +83,7 @@ if (result.ok()) {
 
 | Suite | Merchant private key | Platform public key |
 |-------|----------------------|---------------------|
-| RSA family | PKCS#8 DER (PEM `-----BEGIN PRIVATE KEY-----` or single-line Base64); length must match the suite (3072/4096) | X.509 SPKI (PEM `-----BEGIN PUBLIC KEY-----` or single-line Base64) |
+| RSA family | PKCS#8 DER (PEM `-----BEGIN PRIVATE KEY-----` or single-line Base64); length must match the suite (2048/3072/4096) | X.509 SPKI (PEM `-----BEGIN PUBLIC KEY-----` or single-line Base64) |
 | SM2 family | d scalar, 32 bytes (Base64) or PKCS#8; curve fixed to sm2p256v1 | Uncompressed point `04‖X‖Y`, 65 bytes (Base64) or SPKI |
 
 Key parsing fails fast at `build()`: illegal formats, length mismatch with the suite,

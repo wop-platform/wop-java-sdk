@@ -1,5 +1,6 @@
 package com.wanlianyida.wop;
 
+import com.wanlianyida.wop.WopError;
 import com.wanlianyida.wop.config.HttpClientSettings;
 import com.wanlianyida.wop.config.WopRequestContext;
 import com.wanlianyida.wop.config.WopSdkConfig;
@@ -48,6 +49,11 @@ class FailoverTransportTest {
         AtomicInteger attempts = new AtomicInteger();
         Transport delegate = new Transport() {
             @Override
+            public boolean supportsTransportCall() {
+                return true;
+            }
+
+            @Override
             public TransportResponse send(RequestDraft d) {
                 return send(d, TransportCall.empty());
             }
@@ -75,8 +81,18 @@ class FailoverTransportTest {
     void readTimeoutIsNotRetried() {
         Transport delegate = new Transport() {
             @Override
+            public boolean supportsTransportCall() {
+                return true;
+            }
+
+            @Override
             public TransportResponse send(RequestDraft d) {
                 throw new WopSdkException("读超时", new SocketTimeoutException("read timed out"));
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft d, TransportCall call) {
+                return send(d);
             }
         };
         WopRequestContext ctx = context(Arrays.asList(
@@ -90,8 +106,18 @@ class FailoverTransportTest {
     void exhaustedAllCandidatesMessage() {
         Transport delegate = new Transport() {
             @Override
+            public boolean supportsTransportCall() {
+                return true;
+            }
+
+            @Override
             public TransportResponse send(RequestDraft d) {
                 throw new WopSdkException("连接失败", new ConnectException("refused"));
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft d, TransportCall call) {
+                return send(d);
             }
         };
         WopRequestContext ctx = context(Arrays.asList(
@@ -105,8 +131,18 @@ class FailoverTransportTest {
     void retryLimitMessageWhenCandidatesRemain() {
         Transport delegate = new Transport() {
             @Override
+            public boolean supportsTransportCall() {
+                return true;
+            }
+
+            @Override
             public TransportResponse send(RequestDraft d) {
                 throw new WopSdkException("连接失败", new ConnectException("refused"));
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft d, TransportCall call) {
+                return send(d);
             }
         };
         WopRequestContext ctx = context(Arrays.asList(
@@ -123,5 +159,15 @@ class FailoverTransportTest {
     void isPreSendRetryableDetectsConnectException() {
         assertTrue(FailoverTransport.isPreSendRetryable(
                 new WopSdkException("x", new ConnectException("refused"))));
+    }
+
+    @Test
+    void requiresDelegateTransportCallSupport() {
+        Transport delegate = draft -> new TransportResponse(200, Collections.emptyMap(), new byte[0]);
+        WopRequestContext ctx = context(Arrays.asList(
+                "https://a.example.com/gateway", "https://b.example.com/gateway"), 3);
+        WopError error = assertThrows(WopError.class,
+                () -> new FailoverTransport(delegate, ctx).send(draft(), ctx.toTransportCall()));
+        assertTrue(error.getMessage().contains("TransportCall"));
     }
 }

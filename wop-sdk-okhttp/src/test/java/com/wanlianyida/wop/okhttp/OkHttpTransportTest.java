@@ -191,17 +191,20 @@ class OkHttpTransportTest {
     @Test
     void doesNotFollowRedirects() throws Exception {
         MockWebServer finalServer = new MockWebServer();
-        finalServer.enqueue(new MockResponse().setBody("final-body"));
-        finalServer.start();
-        server.enqueue(new MockResponse().setResponseCode(302)
-                .addHeader("Location", finalServer.url("/final").toString()));
-        server.start();
-        OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
-        TransportResponse response = transport.send(
-                new RequestDraft("GET", "/redirect", headers("x-wop-appkey", "a"), null));
-        assertEquals(302, response.statusCode());
-        assertEquals(0, finalServer.getRequestCount());
-        finalServer.shutdown();
+        try {
+            finalServer.enqueue(new MockResponse().setBody("final-body"));
+            finalServer.start();
+            server.enqueue(new MockResponse().setResponseCode(302)
+                    .addHeader("Location", finalServer.url("/final").toString()));
+            server.start();
+            OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
+            TransportResponse response = transport.send(
+                    new RequestDraft("GET", "/redirect", headers("x-wop-appkey", "a"), null));
+            assertEquals(302, response.statusCode());
+            assertEquals(0, finalServer.getRequestCount());
+        } finally {
+            finalServer.shutdown();
+        }
     }
 
     @Test

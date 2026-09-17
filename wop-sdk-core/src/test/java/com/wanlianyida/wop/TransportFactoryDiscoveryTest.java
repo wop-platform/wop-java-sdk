@@ -125,6 +125,24 @@ class TransportFactoryDiscoveryTest {
     }
 
     @Test
+    void wopTransportMismatchWithSingleFactoryFailsFast() {
+        String previous = System.getProperty(TransportFactory.TRANSPORT_PROPERTY);
+        System.setProperty(TransportFactory.TRANSPORT_PROPERTY, "okhttp");
+        try {
+            WopError ex = assertThrows(WopError.class,
+                    () -> TransportFactory.discover(TransportFactoryDiscoveryTest.class.getClassLoader()));
+            assertTrue(ex.getMessage().contains("wop.transport=okhttp"), ex.getMessage());
+            assertTrue(ex.getMessage().contains("alpha"), ex.getMessage());
+        } finally {
+            if (previous == null) {
+                System.clearProperty(TransportFactory.TRANSPORT_PROPERTY);
+            } else {
+                System.setProperty(TransportFactory.TRANSPORT_PROPERTY, previous);
+            }
+        }
+    }
+
+    @Test
     void wopTransportInvalidValueListsAvailable(@TempDir Path tempDir) throws IOException {
         writeServices(tempDir, "com.wanlianyida.wop.TestAlphaTransportFactory\n"
                 + "com.wanlianyida.wop.TestBetaTransportFactory\n");
