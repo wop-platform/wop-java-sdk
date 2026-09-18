@@ -156,14 +156,6 @@ public final class WopClient {
             throw WopError.configuration("execute 需要经 fromConfig/defaultClient 构造的客户端");
         }
         ConfigUrlUtils.validateApiPath(path);
-        if (sdkConfig == null) {
-            if (options != null && !options.isEmpty()) {
-                throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
-            }
-            RequestDraft draft = buildRequest(method, path, body, level);
-            TransportResponse response = transport.send(draft);
-            return finishExecute(response, draft, null);
-        }
         WopRequestContext ctx = resolveContext(options);
         RequestDraft draft = buildRequestInternal(method, path, body, level, ctx.outbound());
         Transport sending = new FailoverTransport(transport, ctx);
@@ -282,7 +274,14 @@ public final class WopClient {
      */
     public VerifyResult verifyResponse(Map<String, String> headers, byte[] body, String requestPath,
                                        WopRequestOptions options) {
-        return verifyInboundWithOptions(headers, body, requestPath, options);
+        if (options == null || options.isEmpty()) {
+            return verifyInbound(headers, body, requestPath, null);
+        }
+        if (sdkConfig == null) {
+            throw WopError.configuration("凭证覆盖需要经 fromConfig 构造的客户端");
+        }
+        return verifyInbound(headers, body, requestPath,
+                WopRequestContext.resolveInboundOnly(sdkConfig, options).inbound());
     }
 
     /** 校验 SDK 发送流程的响应（路径取自草稿）。 */
@@ -293,7 +292,7 @@ public final class WopClient {
     /** 带请求级覆盖的响应验签（路径取自草稿）。 */
     public VerifyResult verifyResponse(TransportResponse response, RequestDraft draft,
                                        WopRequestOptions options) {
-        return verifyInboundWithOptions(response.headers(), response.body(), draft.path(), options);
+        return verifyResponse(response.headers(), response.body(), draft.path(), options);
     }
 
     /** 校验平台回调（canonical URI = 回调 path）。 */
@@ -312,19 +311,8 @@ public final class WopClient {
         if (sdkConfig == null) {
             throw WopError.configuration("verifyCallback 凭证覆盖需要经 fromConfig 构造的客户端");
         }
-        return verifyInboundWithOptions(headers, body, callbackPath, options);
-    }
-
-    private VerifyResult verifyInboundWithOptions(Map<String, String> headers, byte[] body, String path,
-                                                  WopRequestOptions options) {
-        if (options == null || options.isEmpty()) {
-            return verifyInbound(headers, body, path, null);
-        }
-        if (sdkConfig == null) {
-            throw WopError.configuration("凭证覆盖需要经 fromConfig 构造的客户端");
-        }
-        WopRequestContext ctx = WopRequestContext.resolveInboundOnly(sdkConfig, options);
-        return verifyInbound(headers, body, path, ctx.inbound());
+        return verifyInbound(headers, body, callbackPath,
+                WopRequestContext.resolveInboundOnly(sdkConfig, options).inbound());
     }
 
     private WopRequestContext resolveContext(WopRequestOptions options) {

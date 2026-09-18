@@ -1,6 +1,7 @@
 package com.wanlianyida.wop.okhttp;
 
 import com.wanlianyida.wop.RequestDraft;
+import com.wanlianyida.wop.TransportCall;
 import com.wanlianyida.wop.TransportResponse;
 import com.wanlianyida.wop.WopSdkException;
 import okhttp3.mockwebserver.MockResponse;
@@ -220,5 +221,56 @@ class OkHttpTransportTest {
         assertEquals(200, response.statusCode());
         assertEquals(OkHttpTransport.MAX_RESPONSE_BYTES, response.body().length);
         assertArrayEquals(exact, response.body());
+    }
+
+    // send(draft, TransportCall) 覆盖路径（§7.1）：null call / serverRoot 覆盖 / 超时单边覆盖
+
+    @Test
+    void sendWithNullCallUsesAdapterDefaults() throws Exception {
+        enqueue(200, "ok");
+        server.start();
+        OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}), null);
+        assertEquals(200, response.statusCode());
+        assertEquals("/gateway/x", server.takeRequest().getPath());
+    }
+
+    @Test
+    void callServerRootOverridesBaseUrl() throws Exception {
+        enqueue(200, "ok");
+        server.start();
+        // baseUrl 指向不可达地址：serverRoot 覆盖必须生效才能拿到 200（connect/read 双覆盖走 clientForCall 重建分支）
+        OkHttpTransport transport = new OkHttpTransport("http://invalid.example");
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}),
+                TransportCall.of(server.url("/").toString(), 1500, 2500));
+        assertEquals(200, response.statusCode());
+        assertEquals("/gateway/x", server.takeRequest().getPath());
+    }
+
+    @Test
+    void emptyServerRootAndSingleSideTimeoutFallback() throws Exception {
+        enqueue(200, "a");
+        enqueue(200, "b");
+        enqueue(200, "c");
+        server.start();
+        OkHttpTransport transport = new OkHttpTransport();
+        RequestDraft absolute = new RequestDraft("POST", server.url("/gw").toString(), headers(), new byte[]{1});
+        // 空串 serverRoot 视为未设置 → 走绝对 URL；connect/read 覆盖各自独立判定（单边覆盖分支）
+        assertEquals(200, transport.send(absolute,
+                TransportCall.of("", TransportCall.USE_DEFAULT, TransportCall.USE_DEFAULT)).statusCode());
+        assertEquals(200, transport.send(absolute,
+                TransportCall.of(null, 1500, TransportCall.USE_DEFAULT)).statusCode());
+        assertEquals(200, transport.send(absolute,
+                TransportCall.of(null, TransportCall.USE_DEFAULT, 2500)).statusCode());
+        assertEquals("/gw", server.takeRequest().getPath());
+        assertEquals("/gw", server.takeRequest().getPath());
+        assertEquals("/gw", server.takeRequest().getPath());
+    }
+
+    @Test
+    void supportsTransportCallAdvertised() {
+        assertTrue(new OkHttpTransport().supportsTransportCall());
     }
 }

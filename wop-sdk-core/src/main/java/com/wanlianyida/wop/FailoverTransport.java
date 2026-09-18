@@ -39,45 +39,26 @@ public final class FailoverTransport implements Transport {
             try {
                 return sendWithDelegate(draft, attemptCall);
             } catch (WopSdkException e) {
-                last = e;
                 if (!isPreSendRetryable(e)) {
                     throw e;
                 }
-                if (attempted >= maxAttempts) {
-                    throw wrapExhausted(e, attempted);
-                }
+                last = e;
             }
         }
-        if (last != null) {
-            throw wrapExhausted(last, attempted);
-        }
-        throw new WopSdkException("Failover 无可用网关地址");
+        throw wrapExhausted(last, attempted);
     }
 
     private TransportResponse sendWithDelegate(RequestDraft draft, TransportCall attemptCall) {
-        if (needsExplicitTransportCall(attemptCall) && !delegate.supportsTransportCall()) {
+        if (!delegate.supportsTransportCall()) {
             throw WopError.configuration(
                     "底层 Transport 未实现 send(RequestDraft, TransportCall)，"
                             + "无法应用 Failover 或请求级网关/超时覆盖");
         }
-        if (delegate.supportsTransportCall()) {
-            return delegate.send(draft, attemptCall);
-        }
-        return delegate.send(draft);
-    }
-
-    /** 双参 send 才能传递 serverRoot/超时；单参 default 会静默丢弃 attemptCall。 */
-    private static boolean needsExplicitTransportCall(TransportCall attemptCall) {
-        if (attemptCall == null || attemptCall == TransportCall.empty()) {
-            return false;
-        }
-        return attemptCall.serverRoot() != null
-                || attemptCall.connectTimeoutMillis() > 0
-                || attemptCall.readTimeoutMillis() > 0;
+        return delegate.send(draft, attemptCall);
     }
 
     private static TransportCall mergeCall(TransportCall call, String serverRoot) {
-        if (call == null || call == TransportCall.empty()) {
+        if (call == null) {
             return TransportCall.of(serverRoot, TransportCall.USE_DEFAULT, TransportCall.USE_DEFAULT);
         }
         return TransportCall.of(serverRoot, call.connectTimeoutMillis(), call.readTimeoutMillis());
@@ -100,7 +81,7 @@ public final class FailoverTransport implements Transport {
     private WopSdkException wrapExhausted(WopSdkException last, int attempted) {
         int maxAttempts = 1 + Math.min(maxRetryCount, Math.max(0, candidates.size() - 1));
         String message;
-        if (attempted < candidates.size() && attempted >= maxAttempts) {
+        if (attempted < candidates.size()) {
             message = "网关地址不可用（已尝试 " + attempted + " 个，已达重试上限 " + maxRetryCount + "）";
         } else {
             message = "全部网关地址不可用（已尝试 " + attempted + " 个）";

@@ -1,6 +1,7 @@
 package com.wanlianyida.wop.unirest;
 
 import com.wanlianyida.wop.RequestDraft;
+import com.wanlianyida.wop.TransportCall;
 import com.wanlianyida.wop.TransportResponse;
 import com.wanlianyida.wop.WopSdkException;
 import okhttp3.mockwebserver.MockResponse;
@@ -236,5 +237,45 @@ class UnirestTransportTest {
                 new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals("chunked-body", new String(response.body(), StandardCharsets.UTF_8));
+    }
+
+    // send(draft, TransportCall) 覆盖路径（§7.1）：K9 connect 覆盖拒绝 / read 级 requestTimeout / null call
+
+    @Test
+    void perCallConnectTimeoutOverrideRejected() throws IOException {
+        server.start();
+        UnirestTransport transport = new UnirestTransport();
+        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}),
+                TransportCall.of(server.url("/").toString(), 1500, TransportCall.USE_DEFAULT)));
+        assertTrue(ex.getMessage().contains("不支持请求级 connectTimeout"), ex.getMessage());
+    }
+
+    @Test
+    void readTimeoutAndServerRootOverrideApply() throws Exception {
+        enqueue(200, "a");
+        enqueue(200, "b");
+        enqueue(200, "c");
+        server.start();
+        // baseUrl 指向不可达地址：serverRoot 覆盖 + read 级 requestTimeout 生效才能拿到 200
+        UnirestTransport transport = new UnirestTransport("http://invalid.example");
+        assertEquals(200, transport.send(
+                new RequestDraft("POST", "/gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}),
+                TransportCall.of(server.url("/").toString(), TransportCall.USE_DEFAULT, 2500)).statusCode());
+        // 空串 serverRoot 视为未设置 → 走绝对 URL
+        assertEquals(200, transport.send(
+                new RequestDraft("POST", server.url("/gw").toString(), headers(), new byte[]{1}),
+                TransportCall.of("", TransportCall.USE_DEFAULT, 2500)).statusCode());
+        // null call：两处请求级覆盖均跳过
+        assertEquals(200, transport.send(
+                new RequestDraft("POST", server.url("/gw").toString(), headers(), new byte[]{1}), null).statusCode());
+        assertEquals("/gateway/x", server.takeRequest().getPath());
+        assertEquals("/gw", server.takeRequest().getPath());
+        assertEquals("/gw", server.takeRequest().getPath());
+    }
+
+    @Test
+    void supportsTransportCallAdvertised() {
+        assertTrue(new UnirestTransport().supportsTransportCall());
     }
 }

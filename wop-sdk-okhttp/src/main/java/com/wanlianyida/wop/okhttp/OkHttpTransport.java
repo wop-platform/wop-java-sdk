@@ -107,7 +107,7 @@ public final class OkHttpTransport implements Transport {
 
     private OkHttpClient clientForCall(TransportCall call) {
         OkHttpClient.Builder builder = client.newBuilder().followRedirects(false);
-        if (call == null || call == TransportCall.empty()) {
+        if (call == null) {
             return builder.build();
         }
         if (call.connectTimeoutMillis() > 0) {

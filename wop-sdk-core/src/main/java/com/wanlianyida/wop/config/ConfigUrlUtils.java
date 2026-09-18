@@ -32,7 +32,7 @@ public final class ConfigUrlUtils {
         if (parsed.getUserInfo() != null && !parsed.getUserInfo().isEmpty()) {
             throw WopError.configuration(fieldName + " 不得含 user-info: " + trimmed);
         }
-        if (parsed.getHost() == null || parsed.getHost().isEmpty()) {
+        if (parsed.getHost() == null) {
             throw WopError.configuration(fieldName + " 不是合法 URL: " + trimmed);
         }
         StringBuilder normalized = new StringBuilder("https://");
@@ -40,10 +40,7 @@ public final class ConfigUrlUtils {
         if (parsed.getPort() > 0) {
             normalized.append(':').append(parsed.getPort());
         }
-        String path = parsed.getPath();
-        if (path != null) {
-            normalized.append(path);
-        }
+        normalized.append(parsed.getPath());
         String result = normalized.toString();
         if (result.endsWith("/")) {
             result = result.substring(0, result.length() - 1);
@@ -65,17 +62,12 @@ public final class ConfigUrlUtils {
         if (path.indexOf('?') >= 0 || path.indexOf('#') >= 0) {
             throw WopError.configuration("path 不得含 query 或 fragment: " + path);
         }
-        String lower = path.toLowerCase(java.util.Locale.ROOT);
-        if (lower.startsWith("http:") || lower.startsWith("https:")) {
-            throw WopError.configuration("path 不得为绝对 URL: " + path);
-        }
     }
 
     /** §7.7 字符串拼接 serverRoot + path（K23）。 */
     public static String joinUrl(String serverRoot, String path) {
         validateApiPath(path);
         String root = serverRoot.endsWith("/") ? serverRoot.substring(0, serverRoot.length() - 1) : serverRoot;
-        String trimmedPath = path.startsWith("/") ? path.substring(1) : path;
-        return root + '/' + trimmedPath;
+        return root + '/' + path.substring(1);
     }
 }
