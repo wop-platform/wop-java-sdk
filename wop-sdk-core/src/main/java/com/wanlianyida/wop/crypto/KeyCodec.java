@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 密钥解析（KeyCodec 边缘，D12 分发契约）：字符串入参（PEM 或 Base64 单行）→ JCA Key（缓存解析，D7）。
  * <ul>
- *   <li>RSA：公钥 = X.509 SPKI（PEM 或 Base64）；私钥 = PKCS#8；密钥长度须与套件一致（3072/4096）</li>
+ *   <li>RSA：公钥 = X.509 SPKI（PEM 或 Base64）；私钥 = PKCS#8；密钥长度须与套件一致（2048/3072/4096）</li>
  *   <li>SM2：公钥 = 未压缩点 04‖X‖Y 65B（Base64）或 SPKI；私钥 = d 32B 标量（Base64）或 PKCS#8；
  *       曲线守卫 sm2p256v1（I5）</li>
  * </ul>

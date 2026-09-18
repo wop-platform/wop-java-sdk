@@ -21,9 +21,59 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 | `wop-sdk-jdkhttp` | `HttpURLConnection` 适配器（零额外依赖、Java 8 floor；仅标准方法集，PATCH 等扩展方法见模块 javadoc） |
 | `wop-sdk-unirest` | Kong Unirest 4.x 适配器（unirest-java-core 依赖 `provided`，商户自带版本；运行时要求 Java 11+，上游 4.x 字节码 major 55） |
 
-支持套件：`WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。
+支持套件：`WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。
 
-## 快速开始
+## 配置层一站式接入（wop-sdk-config-spec）
+
+商户可通过 JSON 配置文件 + `defaultClient().execute(...)` 一行完成签名、HTTP 发送与验签解密。
+
+```xml
+<!-- core + 传输模块之一（通常 jdkhttp） -->
+<dependency>
+  <groupId>com.wanlianyida</groupId>
+  <artifactId>wop-sdk-jdkhttp</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+`config/wopSdkConfig.json`（外置部署，勿提交密钥）示例字段：`appKey`、`suite`、双钥、`serverRoot`、
+可选 `backupServerRoots` 与 `httpClient`（`connectTimeout` / `readTimeout` / `maxRetryCount`）。
+
+```bash
+export WOP_SDK_CONFIG=/etc/wop/wopSdkConfig.json
+# 或 JVM 优先级更高：
+java -Dwop.sdk.config.file=/etc/wop/wopSdkConfig.json -jar app.jar
+# 多传输模块共存时显式指定：
+java -Dwop.transport=jdkhttp -jar app.jar
+```
+
+```java
+import com.wanlianyida.wop.VerifyResult;
+import com.wanlianyida.wop.WopClient;
+import com.wanlianyida.wop.SecurityLevel;
+
+VerifyResult result = WopClient.defaultClient().execute(
+        "POST", "/gateway/order/create", body, SecurityLevel.L0);
+// 非 2xx → WopGatewayResponseException（含 statusCode/body）
+// 密钥轮换：WopSdkConfigLoader.clearCache(); WopClient.resetDefault();
+```
+
+程序化构造（与 JSON 校验等价）：
+
+```java
+WopClient client = WopClient.builder()
+        .appKey("app_001").suite("WOP-RSA3072-SHA256")
+        .merchantPrivateKey(merchantPrivateKey).platformPublicKey(platformPublicKey)
+        .serverRoot("https://gw.example.com/gateway")
+        .build();
+```
+
+请求级覆盖：`WopRequestOptions.builder().appKey(...).serverRoot(...).build()` 传入
+`execute(..., options)` / `buildRequest(..., options)` / `verifyCallback(..., options)`。
+
+> **Unirest 适配器（K9）**：`connectTimeout` 为实例级，请求级 connect 覆盖不生效；`readTimeout` 可按请求设置。
+
+## 快速开始（分步 API）
 
 ```xml
 <dependency>
@@ -55,7 +105,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 ```java
 WopClient client = WopClient.builder()
         .appKey("app_001")
-        .suite("WOP-RSA3072-SHA256")            // 或 WOP-RSA4096-SHA256 / WOP-SM2-SM3
+        .suite("WOP-RSA3072-SHA256")            // 或 WOP-RSA2048/4096-SHA256 / WOP-SM2-SM3
         .merchantPrivateKey(merchantPrivateKey)  // PEM 或 Base64 单行
         .platformPublicKey(platformPublicKey)
         .build();
@@ -82,7 +132,7 @@ if (result.ok()) {
 
 | 套件 | 商户私钥 | 平台公钥 |
 |------|----------|----------|
-| RSA 族 | PKCS#8 DER（PEM `-----BEGIN PRIVATE KEY-----` 或 Base64 单行）；长度须与套件一致（3072/4096） | X.509 SPKI（PEM `-----BEGIN PUBLIC KEY-----` 或 Base64 单行） |
+| RSA 族 | PKCS#8 DER（PEM `-----BEGIN PRIVATE KEY-----` 或 Base64 单行）；长度须与套件一致（2048/3072/4096） | X.509 SPKI（PEM `-----BEGIN PUBLIC KEY-----` 或 Base64 单行） |
 | SM2 族 | d 标量 32 字节（Base64）或 PKCS#8；曲线固定 sm2p256v1 | 未压缩点 `04‖X‖Y` 65 字节（Base64）或 SPKI |
 
 密钥解析在 `build()` 时 fail-fast：格式非法、长度与套件不符、跨族材料均以明确异常拒绝。

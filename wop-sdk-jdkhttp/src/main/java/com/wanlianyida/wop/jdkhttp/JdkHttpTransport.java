@@ -2,8 +2,10 @@ package com.wanlianyida.wop.jdkhttp;
 
 import com.wanlianyida.wop.RequestDraft;
 import com.wanlianyida.wop.Transport;
+import com.wanlianyida.wop.TransportCall;
 import com.wanlianyida.wop.TransportResponse;
 import com.wanlianyida.wop.WopSdkException;
+import com.wanlianyida.wop.config.ConfigUrlUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -34,6 +36,9 @@ public final class JdkHttpTransport implements Transport {
     /** 连接超时（毫秒），对应原 HttpClient.newBuilder().connectTimeout(10s)。 */
     private static final int CONNECT_TIMEOUT_MS = 10_000;
 
+    /** 读超时（毫秒，P1 默认 30s）。 */
+    private static final int READ_TIMEOUT_MS = 30_000;
+
     /**
      * 方法白名单（前后留空格便于 contains 匹配）：即 HttpURLConnection.setRequestMethod
      * 文档列出的标准方法集；PATCH/PROPFIND 等扩展方法被其拒绝（ProtocolException），
@@ -51,7 +56,17 @@ public final class JdkHttpTransport implements Transport {
     }
 
     @Override
+    public boolean supportsTransportCall() {
+        return true;
+    }
+
+    @Override
     public TransportResponse send(RequestDraft draft) {
+        return send(draft, TransportCall.empty());
+    }
+
+    @Override
+    public TransportResponse send(RequestDraft draft, TransportCall call) {
         if (Thread.currentThread().isInterrupted()) {
             throw new WopSdkException("JDK HttpURLConnection 传输被中断");
         }
@@ -60,10 +75,15 @@ public final class JdkHttpTransport implements Transport {
                     + "：仅接受标准方法（GET/HEAD/POST/PUT/DELETE/OPTIONS/TRACE），"
                     + "PATCH 等扩展方法请改用 okhttp/unirest 适配器");
         }
+        int connectTimeout = resolveTimeout(call == null ? TransportCall.USE_DEFAULT : call.connectTimeoutMillis(),
+                CONNECT_TIMEOUT_MS);
+        int readTimeout = resolveTimeout(call == null ? TransportCall.USE_DEFAULT : call.readTimeoutMillis(),
+                READ_TIMEOUT_MS);
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) new URL(resolve(draft)).openConnection();
-            connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            connection = (HttpURLConnection) new URL(resolve(draft, call)).openConnection();
+            connection.setConnectTimeout(connectTimeout);
+            connection.setReadTimeout(readTimeout);
             connection.setInstanceFollowRedirects(false);   // 与 java.net.http 默认一致：不跟随重定向
             draft.headers().forEach(connection::addRequestProperty);
             boolean normalizedGet = "GET".equals(draft.method()) || "HEAD".equals(draft.method());
@@ -161,15 +181,22 @@ public final class JdkHttpTransport implements Transport {
         return buffer.toByteArray();
     }
 
-    private String resolve(RequestDraft draft) {
+    private String resolve(RequestDraft draft, TransportCall call) {
+        if (call != null && call.serverRoot() != null && !call.serverRoot().isEmpty()) {
+            return ConfigUrlUtils.joinUrl(call.serverRoot(), draft.path());
+        }
         String path = draft.path();
-        if (path.startsWith("http")) {   // http:/ 与 https:// 同判
+        if (path.startsWith("http")) {
             return path;
         }
         if (baseUrl == null) {
             throw new WopSdkException("path 非绝对 URL 且未配置 baseUrl: " + path);
         }
         return baseUrl + (path.startsWith("/") ? path : "/" + path);
+    }
+
+    private static int resolveTimeout(int fromCall, int defaultMs) {
+        return fromCall > 0 ? fromCall : defaultMs;
     }
 
     private static String trimBaseUrl(String baseUrl) {
