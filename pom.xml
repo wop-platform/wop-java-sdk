@@ -6,7 +6,7 @@
 
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-java-sdk</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <packaging>pom</packaging>
   <name>WOP Java SDK</name>
   <description>WOP 商户侧官方 Java SDK：签名/摘要/L2 数字信封/验签解密协议核心 + HTTP 适配器</description>
