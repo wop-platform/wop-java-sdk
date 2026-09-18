@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -117,8 +119,8 @@ class AlgorithmSuiteTest {
         KeyPair kp = kpg.generateKeyPair();
         String privB64 = Base64.getEncoder().encodeToString(kp.getPrivate().getEncoded());
         String pubB64 = Base64.getEncoder().encodeToString(kp.getPublic().getEncoded());
-        var priv = KeyCodec.parsePrivateKey(privB64, suite);
-        var pub = KeyCodec.parsePublicKey(pubB64, suite);
+        PrivateKey priv = KeyCodec.parsePrivateKey(privB64, suite);
+        PublicKey pub = KeyCodec.parsePublicKey(pubB64, suite);
 
         byte[] msg = Codec.utf8("rsa2048 roundtrip");
         byte[] sig = RsaPkcs1SignatureStrategy.INSTANCE.sign(msg, priv, Codec.utf8("app_001"));
