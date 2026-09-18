@@ -125,6 +125,23 @@ class TransportFactoryDiscoveryTest {
     }
 
     @Test
+    void blankWopTransportPropertyTreatedAsUnset() {
+        // 全空白 wop.transport 视为未设置（§2.2）：不进入显式匹配，回落恰一即用规则 → alpha
+        String previous = System.getProperty(TransportFactory.TRANSPORT_PROPERTY);
+        System.setProperty(TransportFactory.TRANSPORT_PROPERTY, "   ");
+        try {
+            assertEquals("alpha", TransportFactory.discover(
+                    TransportFactoryDiscoveryTest.class.getClassLoader()).name());
+        } finally {
+            if (previous == null) {
+                System.clearProperty(TransportFactory.TRANSPORT_PROPERTY);
+            } else {
+                System.setProperty(TransportFactory.TRANSPORT_PROPERTY, previous);
+            }
+        }
+    }
+
+    @Test
     void wopTransportMismatchWithSingleFactoryFailsFast() {
         String previous = System.getProperty(TransportFactory.TRANSPORT_PROPERTY);
         System.setProperty(TransportFactory.TRANSPORT_PROPERTY, "okhttp");

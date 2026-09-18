@@ -2,6 +2,7 @@ package com.wanlianyida.wop.jdkhttp;
 
 import com.sun.net.httpserver.HttpServer;
 import com.wanlianyida.wop.RequestDraft;
+import com.wanlianyida.wop.TransportCall;
 import com.wanlianyida.wop.TransportResponse;
 import com.wanlianyida.wop.WopSdkException;
 import org.junit.jupiter.api.AfterEach;
@@ -224,5 +225,39 @@ class JdkHttpTransportTest {
                 new RequestDraft("POST", "/gateway/x", headers(), null));
         assertEquals(200, response.statusCode());
         assertEquals(0, seenBody.get().length);
+    }
+
+    // send(draft, TransportCall) 覆盖路径：null call / serverRoot+请求级超时 / 空串 serverRoot
+
+    @Test
+    void sendWithNullCallUsesAdapterDefaults() throws Exception {
+        String base = start("ok");
+        JdkHttpTransport transport = new JdkHttpTransport(base);
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}), null);
+        assertEquals(200, response.statusCode());
+        assertEquals("POST", seenMethod.get());
+    }
+
+    @Test
+    void callServerRootAndTimeoutsOverrideBaseUrl() throws Exception {
+        String base = start("ok");
+        // 无 baseUrl：serverRoot 覆盖 + 请求级 connect/read 超时生效才能拿到 200
+        JdkHttpTransport transport = new JdkHttpTransport();
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}),
+                TransportCall.of(base, 1500, 2500));
+        assertEquals(200, response.statusCode());
+        assertEquals("POST", seenMethod.get());
+
+        // 空串 serverRoot 视为未设置 → 走绝对 URL
+        assertEquals(200, transport.send(
+                new RequestDraft("POST", base + "/gateway/x", headers(), new byte[]{1}),
+                TransportCall.of("", TransportCall.USE_DEFAULT, TransportCall.USE_DEFAULT)).statusCode());
+    }
+
+    @Test
+    void supportsTransportCallAdvertised() {
+        assertTrue(new JdkHttpTransport().supportsTransportCall());
     }
 }

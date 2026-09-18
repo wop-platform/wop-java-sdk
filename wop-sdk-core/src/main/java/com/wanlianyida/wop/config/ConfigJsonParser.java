@@ -235,10 +235,6 @@ final class ConfigJsonParser {
             throw syntax("期望数字");
         }
         String num = json.substring(start, pos);
-        if (num.indexOf('e') >= 0 || num.indexOf('E') >= 0
-                || num.indexOf('.') >= 0) {
-            throw WopError.configuration("配置字段 " + fieldName + " 类型非法: " + num);
-        }
         try {
             long value = Long.parseLong(num);
             if (positiveOnly && value <= 0) {

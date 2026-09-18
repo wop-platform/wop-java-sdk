@@ -80,7 +80,7 @@ public final class WopSdkConfigLoader {
         Objects.requireNonNull(path, "path");
         Path normalized = path.toAbsolutePath().normalize();
         String cacheKey = "file:" + normalized;
-        return loadCached(cacheKey, () -> readFileUtf8(normalized, true));
+        return loadCached(cacheKey, () -> readFileUtf8(normalized));
     }
 
     /** 清除加载缓存（测试 / 配置轮换编排，K13/K26）。 */
@@ -91,34 +91,39 @@ public final class WopSdkConfigLoader {
     }
 
     private static WopSdkConfig loadCached(String cacheKey, ConfigReader reader) {
+        WopSdkConfig parsed;
         synchronized (CACHE_LOCK) {
             WopSdkConfig cached = CACHE.get(cacheKey);
             if (cached != null) {
                 return cached;
             }
         }
-        WopSdkConfig parsed = ConfigJsonParser.parse(reader.readUtf8());
+        try {
+            parsed = ConfigJsonParser.parse(reader.readUtf8());
+        } catch (IOException e) {
+            throw WopError.configuration("配置文件读取失败: " + cacheKey, e);
+        }
         synchronized (CACHE_LOCK) {
-            WopSdkConfig cached = CACHE.get(cacheKey);
-            if (cached != null) {
-                return cached;
-            }
-            CACHE.put(cacheKey, parsed);
-            return parsed;
+            CACHE.putIfAbsent(cacheKey, parsed);
+            return CACHE.get(cacheKey);
         }
     }
 
     private static List<DiscoveryCandidate> defaultDiscoveryCandidates() {
+        return defaultDiscoveryCandidates(System.getProperty(CONFIG_FILE_PROPERTY),
+                System.getenv(CONFIG_FILE_ENV));
+    }
+
+    /** 测试可注入 sysProp/env 的重载（K13：环境分支可直测）。 */
+    static List<DiscoveryCandidate> defaultDiscoveryCandidates(String sysProp, String env) {
         List<DiscoveryCandidate> out = new ArrayList<>();
 
-        String sysProp = System.getProperty(CONFIG_FILE_PROPERTY);
         if (sysProp != null && !sysProp.trim().isEmpty()) {
             Path path = Paths.get(sysProp.trim());
             out.add(fileCandidate(path, sysProp.trim(), true));
             return out;
         }
 
-        String env = System.getenv(CONFIG_FILE_ENV);
         if (env != null && !env.trim().isEmpty()) {
             Path path = Paths.get(env.trim());
             out.add(fileCandidate(path, env.trim(), true));
@@ -142,7 +147,7 @@ public final class WopSdkConfigLoader {
         boolean readable = Files.isRegularFile(normalized) && Files.isReadable(normalized);
         String cacheKey = "file:" + normalized;
         return new DiscoveryCandidate(cacheKey, display, readable, explicit,
-                () -> readFileUtf8(normalized, explicit));
+                () -> readFileUtf8(normalized));
     }
 
     private static DiscoveryCandidate classpathCandidate(String resource, String display) {
@@ -160,25 +165,14 @@ public final class WopSdkConfigLoader {
         return cl.getResource(resource) != null;
     }
 
-    private static String readFileUtf8(Path path, boolean explicit) {
-        if (!Files.isRegularFile(path)) {
-            if (explicit) {
-                throw WopError.configuration("显式配置文件不可读: " + path);
-            }
+    private static String readFileUtf8(Path path) throws IOException {
+        if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
             throw WopError.configuration("配置文件不可读: " + path);
         }
-        if (!Files.isReadable(path)) {
-            throw WopError.configuration(
-                    (explicit ? "显式配置文件不可读: " : "配置文件不可读: ") + path);
-        }
-        try {
-            return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw WopError.configuration("配置文件读取失败: " + path, e);
-        }
+        return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
     }
 
-    private static String readClasspathUtf8(String resource, String display) {
+    private static String readClasspathUtf8(String resource, String display) throws IOException {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) {
             cl = WopSdkConfigLoader.class.getClassLoader();
@@ -187,10 +181,7 @@ public final class WopSdkConfigLoader {
             if (in == null) {
                 throw WopError.configuration("classpath 配置文件不可读: " + display);
             }
-            byte[] bytes = readAllBytes(in);
-            return new String(bytes, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw WopError.configuration("classpath 配置文件读取失败: " + display, e);
+            return new String(readAllBytes(in), StandardCharsets.UTF_8);
         }
     }
 
@@ -210,7 +201,7 @@ public final class WopSdkConfigLoader {
     }
 
     private interface ConfigReader {
-        String readUtf8();
+        String readUtf8() throws IOException;
     }
 
     private static final class DiscoveryCandidate {

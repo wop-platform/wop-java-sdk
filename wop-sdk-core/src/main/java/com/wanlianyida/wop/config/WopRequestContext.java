@@ -96,14 +96,14 @@ public final class WopRequestContext {
 
     private WopRequestContext(Outbound outbound, Inbound inbound, String primaryServerRoot,
                               List<String> failoverCandidates, int maxRetryCount,
-                              Integer connectTimeoutMillis, Integer readTimeoutMillis) {
+                              int connectTimeoutMillis, int readTimeoutMillis) {
         this.outbound = outbound;
         this.inbound = inbound;
         this.primaryServerRoot = primaryServerRoot;
         this.failoverCandidates = failoverCandidates;
         this.maxRetryCount = maxRetryCount;
-        this.connectTimeoutMillis = connectTimeoutMillis == null ? TransportCall.USE_DEFAULT : connectTimeoutMillis;
-        this.readTimeoutMillis = readTimeoutMillis == null ? TransportCall.USE_DEFAULT : readTimeoutMillis;
+        this.connectTimeoutMillis = connectTimeoutMillis;
+        this.readTimeoutMillis = readTimeoutMillis;
     }
 
     /** verifyCallback 凭证覆盖：仅合并凭证字段，忽略 serverRoot/超时（K10）。 */
@@ -179,8 +179,8 @@ public final class WopRequestContext {
             candidates = buildFailoverCandidates(global.serverRoot(), global.backupServerRoots());
         }
 
-        Integer connect = options.hasConnectTimeout() ? options.connectTimeout() : global.httpClient().connectTimeout();
-        Integer read = options.hasReadTimeout() ? options.readTimeout() : global.httpClient().readTimeout();
+        int connect = options.hasConnectTimeout() ? options.connectTimeout() : global.httpClient().connectTimeout();
+        int read = options.hasReadTimeout() ? options.readTimeout() : global.httpClient().readTimeout();
         if (connect <= 0 || read <= 0) {
             throw WopError.configuration("配置字段 httpClient 类型非法: 超时须为正整数，maxRetryCount 须非负");
         }
