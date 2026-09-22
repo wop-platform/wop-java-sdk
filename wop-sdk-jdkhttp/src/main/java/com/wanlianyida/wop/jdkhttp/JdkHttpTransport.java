@@ -94,7 +94,9 @@ public final class JdkHttpTransport implements Transport {
                 connection.setRequestMethod(draft.method());
                 connection.setDoOutput(true);
                 byte[] wire = draft.wireBody() == null ? new byte[0] : draft.wireBody();
-                connection.setFixedLengthStreamingMode(wire.length);
+                // 不设 setFixedLengthStreamingMode（保持默认缓冲模式，wire 本就是内存 byte[]）：
+                // streaming 模式下 JDK 遇 401/407 直接断连并丢弃错误响应体，
+                // getErrorStream() 恒 null → 错误信封读不到且被误报"响应体被截断"
                 try (OutputStream os = connection.getOutputStream()) {
                     os.write(wire);
                 }
