@@ -51,6 +51,12 @@ public final class WopClient {
     private static final String HEADER_DIGEST = "x-wop-content-digest";
     private static final String HEADER_ENCRYPT = "x-wop-encrypt";
 
+    /**
+     * 商户请求标识透传头（不入 signedHeaders 白名单——网关按冻结清单重算 canonical 验签，
+     * 多一头直接导致签名不匹配）。
+     */
+    private static final String HEADER_REQUEST_ID = "x-wop-request-id";
+
     /** 平台响应签名 userId（协议固定值，与 Go 参考实现 sm2PlatformUserID 一致；仅入向验签使用，
      *  非出向默认回退——出向恒为 x-wop-appkey 头值，D14）。 */
     private static final byte[] PLATFORM_SIGN_USER_ID = "1234567812345678".getBytes(StandardCharsets.UTF_8);
@@ -157,7 +163,8 @@ public final class WopClient {
         }
         ConfigUrlUtils.validateApiPath(path);
         WopRequestContext ctx = resolveContext(options);
-        RequestDraft draft = buildRequestInternal(method, path, body, level, ctx.outbound());
+        RequestDraft draft = buildRequestInternal(method, path, body, level,
+                ctx.outbound(), options == null ? null : options.resolvedRequestId());
         Transport sending = new FailoverTransport(transport, ctx);
         TransportResponse response = sending.send(draft, ctx.toTransportCall());
         return finishExecute(response, draft, ctx.inbound());
@@ -192,16 +199,17 @@ public final class WopClient {
     public RequestDraft buildRequest(String method, String path, byte[] body, SecurityLevel level,
                                      WopRequestOptions options) {
         if (options == null || options.isEmpty()) {
-            return buildRequestInternal(method, path, body, level, null);
+            return buildRequestInternal(method, path, body, level, null, null);
         }
         if (sdkConfig == null) {
             throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
         }
-        return buildRequestInternal(method, path, body, level, resolveContext(options).outbound());
+        return buildRequestInternal(method, path, body, level,
+                resolveContext(options).outbound(), options.resolvedRequestId());
     }
 
     private RequestDraft buildRequestInternal(String method, String path, byte[] body, SecurityLevel level,
-                                              WopRequestContext.Outbound outbound) {
+                                              WopRequestContext.Outbound outbound, String requestId) {
         if (method == null || method.trim().isEmpty()) {
             throw WopError.configuration("HTTP method 为空");
         }
@@ -258,6 +266,10 @@ public final class WopClient {
                 Codec.utf8(effectiveAppKey));
         headers.put(HEADER_SIGN, SignHeader.build(effectiveSuite.securityReq(), effectiveExpired,
                 signedHeaders, Codec.b64UrlEncode(signature)));
+        // requestId 在签名落盘后写入，保证不在 signedHeaders 白名单中（网关按冻结清单重算验签）
+        if (requestId != null) {
+            headers.put(HEADER_REQUEST_ID, requestId);
+        }
 
         return new RequestDraft(upperMethod, path, headers, wireBody);
     }

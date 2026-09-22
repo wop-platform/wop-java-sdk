@@ -1,5 +1,7 @@
 package com.wanlianyida.wop;
 
+import com.wanlianyida.wop.config.HttpClientSettings;
+import com.wanlianyida.wop.config.WopSdkConfig;
 import com.wanlianyida.wop.crypto.AlgorithmSuite;
 import com.wanlianyida.wop.crypto.CanonicalRequest;
 import com.wanlianyida.wop.crypto.Codec;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -47,6 +50,21 @@ class WopClientBuildRequestTest {
         return new WopClient(new WopClient.Config(
                 "app_001", AlgorithmSuite.parse(suite),
                 RSA_PRIV, RSA_PUB, 1800), clock, nonce);
+    }
+
+    /** 带 sdkConfig 的客户端（支持 WopRequestOptions）；使用无传输的 stub transport。 */
+    private static WopClient fromConfigClient() {
+        WopSdkConfig cfg = new WopSdkConfig.Builder()
+                .appKey("app_001")
+                .suite("WOP-RSA3072-SHA256")
+                .merchantPrivateKey(RSA_PRIV)
+                .platformPublicKey(RSA_PUB)
+                .serverRoot("https://gw.example.com/gateway")
+                .expiredSeconds(1800L)
+                .httpClient(HttpClientSettings.defaults())
+                .transport(draft -> new TransportResponse(200, Collections.emptyMap(), new byte[0]))
+                .build();
+        return WopClient.fromConfig(cfg);
     }
 
     private static final Supplier<String> NONCE = () -> "fixed00000000000000000000000000a";
@@ -247,6 +265,56 @@ class WopClientBuildRequestTest {
         RequestDraft draft = client.buildRequest("GET", "/p", null, SecurityLevel.L0);
         assertThrows(UnsupportedOperationException.class,
                 () -> draft.headers().put("x-evil", "1"));
+    }
+
+    @Test
+    void requestIdPassesThroughUnsignedHeader() {
+        // requestId 以 x-wop-request-id 透传，不入 signedHeaders
+        WopClient client = fromConfigClient();
+        byte[] body = Codec.utf8("{\"k\":1}");
+        RequestDraft draft = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0,
+                WopRequestOptions.builder().requestId("req-001").build());
+        assertEquals("req-001", draft.headers().get("x-wop-request-id"));
+        SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
+        assertTrue(!sign.signedHeaders().contains("x-wop-request-id"));
+        assertTrue(signatureVerifies(draft, sign, RSA_PUB));
+
+        // L2：透传头同样不入签，签名仍可自证
+        RequestDraft l2 = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L2,
+                WopRequestOptions.builder().requestId("req-002").build());
+        assertEquals("req-002", l2.headers().get("x-wop-request-id"));
+        SignHeader.Parsed l2Sign = SignHeader.parse(l2.headers().get("x-wop-sign"));
+        assertTrue(!l2Sign.signedHeaders().contains("x-wop-request-id"));
+        assertTrue(signatureVerifies(l2, l2Sign, RSA_PUB));
+    }
+
+    @Test
+    void blankRequestIdOmitsHeaderAndValueIsTrimmed() {
+        WopClient client = fromConfigClient();
+        assertNull(client.buildRequest("GET", "/p", null, SecurityLevel.L0,
+                WopRequestOptions.builder().requestId(null).build())
+                .headers().get("x-wop-request-id"));
+        assertNull(client.buildRequest("GET", "/p", null, SecurityLevel.L0,
+                WopRequestOptions.builder().requestId("  ").build())
+                .headers().get("x-wop-request-id"));
+        assertEquals("req-001", client.buildRequest("GET", "/p", null, SecurityLevel.L0,
+                WopRequestOptions.builder().requestId("  req-001  ").build())
+                .headers().get("x-wop-request-id"));
+    }
+
+    @Test
+    void requestIdRejectsControlCharacters() {
+        WopClient client = fromConfigClient();
+        WopError e1 = assertThrows(WopError.class,
+                () -> client.buildRequest("GET", "/p", null, SecurityLevel.L0,
+                        WopRequestOptions.builder().requestId("bad\r\nx-inject: 1").build()));
+        assertEquals(WopError.Category.configuration, e1.category());
+        assertThrows(WopError.class,
+                () -> client.buildRequest("GET", "/p", null, SecurityLevel.L0,
+                        WopRequestOptions.builder().requestId("bad\u0000id").build()));
+        assertThrows(WopError.class,
+                () -> client.buildRequest("GET", "/p", null, SecurityLevel.L0,
+                        WopRequestOptions.builder().requestId("bad\u007fid").build()));
     }
 
     /** 网关侧等价验证：按 signedHeaders 从 draft.headers 重建 canonical 并用商户公钥验签。

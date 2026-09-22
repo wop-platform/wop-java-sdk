@@ -9,10 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * WopRequestOptions 值语义：none 单例、has* 判定矩阵、isEmpty、
- * equals 八字段、toString 打码与 Builder 负数守卫（§6.1）。
+ * equals 九字段、toString 与 Builder 负数守卫（§6.1）。
  */
 class WopRequestOptionsTest {
 
@@ -29,6 +30,7 @@ class WopRequestOptionsTest {
         assertNull(none.serverRoot());
         assertEquals(0, none.connectTimeout());
         assertEquals(0, none.readTimeout());
+        assertNull(none.requestId());
     }
 
     @Test
@@ -39,12 +41,14 @@ class WopRequestOptionsTest {
             assertFalse(WopRequestOptions.builder().merchantPrivateKey(blank).build().hasMerchantPrivateKey());
             assertFalse(WopRequestOptions.builder().platformPublicKey(blank).build().hasPlatformPublicKey());
             assertFalse(WopRequestOptions.builder().serverRoot(blank).build().hasServerRoot());
+            assertFalse(WopRequestOptions.builder().requestId(blank).build().hasRequestId());
         }
         assertTrue(WopRequestOptions.builder().appKey("a").build().hasAppKey());
         assertTrue(WopRequestOptions.builder().suite("s").build().hasSuite());
         assertTrue(WopRequestOptions.builder().merchantPrivateKey("m").build().hasMerchantPrivateKey());
         assertTrue(WopRequestOptions.builder().platformPublicKey("p").build().hasPlatformPublicKey());
         assertTrue(WopRequestOptions.builder().serverRoot("https://x.example.com/gateway").build().hasServerRoot());
+        assertTrue(WopRequestOptions.builder().requestId("req-001").build().hasRequestId());
     }
 
     @Test
@@ -67,24 +71,26 @@ class WopRequestOptionsTest {
         assertFalse(WopRequestOptions.builder().serverRoot("https://x.example.com/gateway").build().isEmpty());
         assertFalse(WopRequestOptions.builder().connectTimeout(1).build().isEmpty());
         assertFalse(WopRequestOptions.builder().readTimeout(1).build().isEmpty());
+        assertFalse(WopRequestOptions.builder().requestId("req").build().isEmpty());
     }
 
     @Test
     void equalsAndHashCodeVaryEachField() {
-        WopRequestOptions base = full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500);
+        WopRequestOptions base = full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500, "req-001");
         assertEquals(base, base);
-        assertEquals(base, full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500));
-        assertEquals(base.hashCode(), full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500).hashCode());
+        assertEquals(base, full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500, "req-001"));
+        assertEquals(base.hashCode(), full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500, "req-001").hashCode());
         assertNotEquals(base, null);
         assertNotEquals(base, "x");
-        assertNotEquals(base, full("z", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500));
-        assertNotEquals(base, full("a", "z", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500));
-        assertNotEquals(base, full("a", "s", "z", "p", 60L, "https://x.example.com/gateway", 2500, 3500));
-        assertNotEquals(base, full("a", "s", "m", "z", 60L, "https://x.example.com/gateway", 2500, 3500));
-        assertNotEquals(base, full("a", "s", "m", "p", 61L, "https://x.example.com/gateway", 2500, 3500));
-        assertNotEquals(base, full("a", "s", "m", "p", 60L, "https://z.example.com/gateway", 2500, 3500));
-        assertNotEquals(base, full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 1, 3500));
-        assertNotEquals(base, full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 1));
+        assertNotEquals(base, full("z", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500, "req-001"));
+        assertNotEquals(base, full("a", "z", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500, "req-001"));
+        assertNotEquals(base, full("a", "s", "z", "p", 60L, "https://x.example.com/gateway", 2500, 3500, "req-001"));
+        assertNotEquals(base, full("a", "s", "m", "z", 60L, "https://x.example.com/gateway", 2500, 3500, "req-001"));
+        assertNotEquals(base, full("a", "s", "m", "p", 61L, "https://x.example.com/gateway", 2500, 3500, "req-001"));
+        assertNotEquals(base, full("a", "s", "m", "p", 60L, "https://z.example.com/gateway", 2500, 3500, "req-001"));
+        assertNotEquals(base, full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 1, 3500, "req-001"));
+        assertNotEquals(base, full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 1, "req-001"));
+        assertNotEquals(base, full("a", "s", "m", "p", 60L, "https://x.example.com/gateway", 2500, 3500, "req-002"));
     }
 
     @Test
@@ -97,11 +103,13 @@ class WopRequestOptionsTest {
     void toStringMasksCredentials() {
         String s = WopRequestOptions.builder()
                 .appKey("a").suite("s").merchantPrivateKey("secret-m").platformPublicKey("secret-p")
+                .requestId("req-042")
                 .build().toString();
         assertTrue(s.contains("merchantPrivateKey=****"));
         assertTrue(s.contains("platformPublicKey=****"));
         assertFalse(s.contains("secret-m"));
         assertFalse(s.contains("secret-p"));
+        assertTrue(s.contains("requestId=req-042"));
     }
 
     @Test
@@ -114,11 +122,54 @@ class WopRequestOptionsTest {
         assertTrue(e3.getMessage().contains("readTimeout 不能为负数"));
     }
 
+    @Test
+    void builderRejectsRequestIdWithControlCharacters() {
+        // CR (0x0D) and LF (0x0A) are both < 0x20, rejected as control characters
+        String withCrLf = "bad" + String.valueOf('\r') + String.valueOf('\n') + "x-inject: 1";
+
+        // CR+LF test
+        try {
+            WopRequestOptions.builder().requestId(withCrLf).build();
+            fail("Expected WopError for CR+LF");
+        } catch (WopError e) {
+            assertTrue(e.getMessage().contains("控制字符"), "Expected 控制字符 in: " + e.getMessage());
+        }
+
+        // NUL test
+        try {
+            WopRequestOptions.builder().requestId("bad\u0000id").build();
+            fail("Expected WopError for NUL");
+        } catch (WopError e) {
+            assertTrue(e.getMessage().contains("控制字符"));
+        }
+
+        // DEL test
+        try {
+            WopRequestOptions.builder().requestId("bad\u007fid").build();
+            fail("Expected WopError for DEL");
+        } catch (WopError e) {
+            assertTrue(e.getMessage().contains("控制字符"));
+        }
+    }
+
+    @Test
+    void resolvedRequestIdTrimsAndNormalizes() {
+        // null / pure whitespace → null (hasRequestId=false)
+        assertNull(WopRequestOptions.builder().requestId(null).build().requestId());
+        assertFalse(WopRequestOptions.builder().requestId("  ").build().hasRequestId());
+        assertNull(WopRequestOptions.builder().requestId("  ").build().resolvedRequestId());
+        // raw field preserves whitespace; resolvedRequestId trims
+        assertEquals("  req-001  ", WopRequestOptions.builder().requestId("  req-001  ").build().requestId());
+        assertEquals("req-001", WopRequestOptions.builder().requestId("  req-001  ").build().resolvedRequestId());
+    }
+
     private static WopRequestOptions full(String appKey, String suite, String merchant, String platform,
-                                          long expired, String serverRoot, int connectTimeout, int readTimeout) {
+                                          long expired, String serverRoot, int connectTimeout, int readTimeout,
+                                          String requestId) {
         return WopRequestOptions.builder()
                 .appKey(appKey).suite(suite).merchantPrivateKey(merchant).platformPublicKey(platform)
                 .expiredSeconds(expired).serverRoot(serverRoot)
-                .connectTimeout(connectTimeout).readTimeout(readTimeout).build();
+                .connectTimeout(connectTimeout).readTimeout(readTimeout)
+                .requestId(requestId).build();
     }
 }
