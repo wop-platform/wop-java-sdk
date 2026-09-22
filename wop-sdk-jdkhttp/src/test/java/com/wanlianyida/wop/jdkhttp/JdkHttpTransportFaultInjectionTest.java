@@ -169,8 +169,9 @@ class JdkHttpTransportFaultInjectionTest {
         TransportResponse response = transport.send(
                 new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(401, response.statusCode());
-        assertTrue(new String(response.body(), java.nio.charset.StandardCharsets.UTF_8)
-                .contains("OP_GW_1001"));
+        // 完整信封等值比对：contains 断言对畸形/截断 JSON 仍会通过
+        assertEquals("{\"code\":\"OP_GW_1001\",\"message\":\"appKey 为空或应用不存在\"}",
+                new String(response.body(), java.nio.charset.StandardCharsets.UTF_8));
     }
 
     @Test
