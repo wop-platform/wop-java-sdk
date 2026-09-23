@@ -2,6 +2,7 @@ package com.wanlianyida.wop;
 
 import com.wanlianyida.wop.config.HttpClientSettings;
 import com.wanlianyida.wop.config.WopSdkConfig;
+import com.wanlianyida.wop.crypto.SignHeader;
 import com.wanlianyida.wop.crypto.TestVectors;
 import org.junit.jupiter.api.Test;
 
@@ -136,5 +137,40 @@ class WopClientExecuteTest {
                 headers, new byte[0], "/cb",
                 WopRequestOptions.builder().platformPublicKey(RSA_PUB).build()));
         assertTrue(error.getMessage().contains("fromConfig") || error.getMessage().contains("凭证覆盖"));
+    }
+
+    @Test
+    void executeCarriesRequestIdHeaderUnsigned() {
+        // execute 路径的附录 I 透传断言：显式值 trim 上行、恒不入 signedHeaders、缺省生成 UUID
+        AtomicReference<RequestDraft> seen = new AtomicReference<>();
+        Transport transport = new Transport() {
+            @Override
+            public boolean supportsTransportCall() {
+                return true;
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft draft) {
+                return send(draft, TransportCall.empty());
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft draft, TransportCall call) {
+                seen.set(draft);
+                // 空 header 的 200：入向 verify 落 ok=false（永不抛），不影响出向断言
+                return new TransportResponse(200, Collections.emptyMap(), new byte[0]);
+            }
+        };
+        WopClient client = WopClient.fromConfig(configWithTransport(transport));
+
+        client.execute("POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0,
+                WopRequestOptions.builder().requestId("  req-exe-001  ").build());
+        assertEquals("req-exe-001", seen.get().headers().get("x-wop-request-id"));
+        SignHeader.Parsed sign = SignHeader.parse(seen.get().headers().get("x-wop-sign"));
+        assertTrue(!sign.signedHeaders().contains("x-wop-request-id"));
+
+        // 未传 → 缺省生成 UUID（去连字符，小写 32 hex，附录 I/I3）
+        client.execute("POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0);
+        assertTrue(seen.get().headers().get("x-wop-request-id").matches("[0-9a-f]{32}"));
     }
 }
