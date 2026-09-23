@@ -163,6 +163,54 @@ class WopRequestOptionsTest {
         assertEquals("req-001", WopRequestOptions.builder().requestId("  req-001  ").build().resolvedRequestId());
     }
 
+    @Test
+    void requestIdLengthLimit() {
+        // 128 chars OK
+        String len128 = repeat('a', 128);
+        assertEquals(len128, WopRequestOptions.builder().requestId(len128).build().resolvedRequestId());
+        // 129 chars rejected
+        try {
+            WopRequestOptions.builder().requestId(repeat('a', 129)).build();
+            fail("Expected WopError for 129-char requestId");
+        } catch (WopError e) {
+            assertTrue(e.getMessage().contains("128"), "Expected 128 in: " + e.getMessage());
+        }
+    }
+
+    private static String repeat(char c, int count) {
+        char[] arr = new char[count];
+        java.util.Arrays.fill(arr, c);
+        return new String(arr);
+    }
+
+    @Test
+    void requestIdControlCharsCheckedOnRawBeforeTrim() {
+        // 首尾 CR/LF 先被查到（在 trim 之前）
+        WopError e1 = assertThrows(WopError.class,
+                () -> WopRequestOptions.builder().requestId("req-1\r\n").build());
+        assertTrue(e1.getMessage().contains("控制字符"));
+        // 内部的控制字符也直接被拒绝（trim 前后都能查到）
+        WopError e2 = assertThrows(WopError.class,
+                () -> WopRequestOptions.builder().requestId("req\u00001").build());
+        assertTrue(e2.getMessage().contains("控制字符"));
+    }
+
+    @Test
+    void hasConfigOverridesOnlyReturnsTrueForConfigFields() {
+        // 仅 requestId → hasConfigOverrides = false
+        WopRequestOptions onlyReqId = WopRequestOptions.builder().requestId("req-001").build();
+        assertTrue(onlyReqId.hasRequestId());
+        assertFalse(onlyReqId.hasConfigOverrides());
+        assertFalse(onlyReqId.isEmpty()); // isEmpty 仍考虑 requestId
+
+        // appKey → hasConfigOverrides = true
+        WopRequestOptions withAppKey = WopRequestOptions.builder().appKey("app").requestId("req").build();
+        assertTrue(withAppKey.hasConfigOverrides());
+
+        // none → hasConfigOverrides = false
+        assertFalse(WopRequestOptions.none().hasConfigOverrides());
+    }
+
     private static WopRequestOptions full(String appKey, String suite, String merchant, String platform,
                                           long expired, String serverRoot, int connectTimeout, int readTimeout,
                                           String requestId) {

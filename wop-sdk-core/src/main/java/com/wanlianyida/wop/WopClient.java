@@ -162,9 +162,14 @@ public final class WopClient {
             throw WopError.configuration("execute 需要经 fromConfig/defaultClient 构造的客户端");
         }
         ConfigUrlUtils.validateApiPath(path);
-        WopRequestContext ctx = resolveContext(options);
+        String resolvedReqId = (options != null) ? options.resolvedRequestId() : null;
+        boolean hasOverrides = (options != null) && options.hasConfigOverrides();
+        if (hasOverrides && sdkConfig == null) {
+            throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
+        }
+        WopRequestContext ctx = hasOverrides ? resolveContext(options) : defaultRequestContext;
         RequestDraft draft = buildRequestInternal(method, path, body, level,
-                ctx.outbound(), options == null ? null : options.resolvedRequestId());
+                hasOverrides ? ctx.outbound() : null, resolvedReqId);
         Transport sending = new FailoverTransport(transport, ctx);
         TransportResponse response = sending.send(draft, ctx.toTransportCall());
         return finishExecute(response, draft, ctx.inbound());
@@ -201,11 +206,13 @@ public final class WopClient {
         if (options == null || options.isEmpty()) {
             return buildRequestInternal(method, path, body, level, null, null);
         }
-        if (sdkConfig == null) {
+        // 仅 requestId 透传时不需要 sdkConfig（无配置覆盖）
+        if (options.hasConfigOverrides() && sdkConfig == null) {
             throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
         }
         return buildRequestInternal(method, path, body, level,
-                resolveContext(options).outbound(), options.resolvedRequestId());
+                options.hasConfigOverrides() ? resolveContext(options).outbound() : null,
+                options.resolvedRequestId());
     }
 
     private RequestDraft buildRequestInternal(String method, String path, byte[] body, SecurityLevel level,
@@ -328,7 +335,7 @@ public final class WopClient {
     }
 
     private WopRequestContext resolveContext(WopRequestOptions options) {
-        if (options == null || options.isEmpty()) {
+        if (options == null || !options.hasConfigOverrides()) {
             return defaultRequestContext;
         }
         return WopRequestContext.resolve(sdkConfig, options);

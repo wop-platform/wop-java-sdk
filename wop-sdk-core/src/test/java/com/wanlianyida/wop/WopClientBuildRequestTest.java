@@ -317,6 +317,38 @@ class WopClientBuildRequestTest {
                         WopRequestOptions.builder().requestId("bad\u007fid").build()));
     }
 
+    @Test
+    void requestIdLengthLimit() {
+        // 128 chars OK
+        WopClient client = fixedClient(NONCE);
+        String len128 = repeat('a', 128);
+        RequestDraft ok = client.buildRequest("GET", "/p", null, SecurityLevel.L0,
+                WopRequestOptions.builder().requestId(len128).build());
+        assertEquals(len128, ok.headers().get("x-wop-request-id"));
+
+        // 129 chars → build 阶段抛异常
+        assertThrows(WopError.class,
+                () -> WopRequestOptions.builder().requestId(repeat('a', 129)).build());
+    }
+
+    private static String repeat(char c, int count) {
+        char[] arr = new char[count];
+        java.util.Arrays.fill(arr, c);
+        return new String(arr);
+    }
+
+    @Test
+    void requestIdOnlyDoesNotRequireSdkConfig() {
+        // 仅 requestId 的选项走无配置覆盖路径，不需要 fromConfig client
+        WopClient builderClient = WopClient.builder()
+                .appKey("app_001").suite("WOP-RSA3072-SHA256")
+                .merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB).build();
+        // 直接用 builder client（无 sdkConfig）发 requestId 透传，不会抛"需要 fromConfig"
+        RequestDraft draft = builderClient.buildRequest("GET", "/p", null, SecurityLevel.L0,
+                WopRequestOptions.builder().requestId("req-only").build());
+        assertEquals("req-only", draft.headers().get("x-wop-request-id"));
+    }
+
     /** 网关侧等价验证：按 signedHeaders 从 draft.headers 重建 canonical 并用商户公钥验签。
      *  D14：验签 userId = 请求身份 appKey（出向签名 userId 同源）。 */
     static boolean signatureVerifies(RequestDraft draft, SignHeader.Parsed sign, String publicKeyB64) {

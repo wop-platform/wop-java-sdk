@@ -129,8 +129,8 @@ public final class WopRequestOptions {
     }
 
     /**
-     * 解析后 requestId 值：非空时返回 trim 后的值（控制字符在 build 时已校验）；
-     * null 或空白时返回 null（表示透传头缺席）。
+     * 解析后 requestId 值：null/空白时返回 null（表示透传头缺席）；
+     * 有值时返回 trim 后的值（控制字符和长度在 build 时已校验）。
      */
     String resolvedRequestId() {
         if (requestId == null) {
@@ -138,6 +138,16 @@ public final class WopRequestOptions {
         }
         String trimmed = requestId.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * 是否存在请求级配置覆盖（appKey/suite/keys/expiry/serverRoot/timeout）。
+     * 仅含 requestId 时返回 false——此时 buildRequest 不需要 sdkConfig。
+     */
+    boolean hasConfigOverrides() {
+        return hasAppKey() || hasSuite() || hasMerchantPrivateKey()
+                || hasPlatformPublicKey() || hasExpiredSeconds()
+                || hasServerRoot() || hasConnectTimeout() || hasReadTimeout();
     }
 
     /** 是否无任何有效覆盖（与 {@link #none()} 值等价）。 */
@@ -228,15 +238,20 @@ public final class WopRequestOptions {
             if (requestId == null) {
                 return;
             }
+            // 先查原始值（trim 前）防首尾控制字符注入 CR/LF/NUL/DEL
+            for (int i = 0; i < requestId.length(); i++) {
+                char c = requestId.charAt(i);
+                if (c < 0x20 || c == 0x7f) {
+                    throw WopError.configuration("requestId 含控制字符（防头注入）: " + (int) c);
+                }
+            }
             String trimmed = requestId.trim();
             if (trimmed.isEmpty()) {
                 return;
             }
-            for (int i = 0; i < trimmed.length(); i++) {
-                char c = trimmed.charAt(i);
-                if (c < 0x20 || c == 0x7f) {
-                    throw WopError.configuration("requestId 含控制字符（防头注入）: " + (int) c);
-                }
+            // 修剪后校验长度上限（超长 header 会触发 Nginx/ingress large_client_header_buffers 400）
+            if (trimmed.length() > 128) {
+                throw WopError.configuration("requestId 长度不能超过 128（实际 " + trimmed.length() + "）");
             }
         }
     }
