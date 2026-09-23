@@ -220,8 +220,9 @@ public final class WopRequestOptions {
         }
 
         /**
-         * 商户请求标识（透传网关用，不参与签名）；
-         * null 或空白 → 不写入 {@code x-wop-request-id} 头；含控制字符（CR/LF 等）抛出配置异常。
+         * 商户请求标识（wop-specs 附录 I：不参与签名的透传头，须为不含个人数据的不透明关联标识）；
+         * null 或空白 → 缺省生成 UUID（头恒存在）；构造时校验：控制字符（trim 前原值扫描，CR/LF/NUL/DEL）
+         * 与超长（trim 后 UTF-8 字节 &gt; 128）均抛配置异常。
          */
         public Builder requestId(String requestId) {
             this.requestId = requestId;
@@ -238,7 +239,7 @@ public final class WopRequestOptions {
             if (requestId == null) {
                 return;
             }
-            // 先查原始值（trim 前）防首尾控制字符注入 CR/LF/NUL/DEL
+            // 先查原始值（trim 前）防首尾控制字符注入 CR/LF/NUL/DEL（附录 I/I2）
             for (int i = 0; i < requestId.length(); i++) {
                 char c = requestId.charAt(i);
                 if (c < 0x20 || c == 0x7f) {
@@ -249,9 +250,11 @@ public final class WopRequestOptions {
             if (trimmed.isEmpty()) {
                 return;
             }
-            // 修剪后校验长度上限（超长 header 会触发 Nginx/ingress large_client_header_buffers 400）
-            if (trimmed.length() > 128) {
-                throw WopError.configuration("requestId 长度不能超过 128（实际 " + trimmed.length() + "）");
+            // 附录 I/I2：长度上限按 trim 后 UTF-8 编码字节数（网关 header 缓冲按字节计；
+            // 非 ASCII 下 UTF-16 计长会低估线上字节，须显式编码后计量）
+            int utf8Length = trimmed.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            if (utf8Length > 128) {
+                throw WopError.configuration("requestId UTF-8 字节长度不能超过 128（实际 " + utf8Length + "）");
             }
         }
     }

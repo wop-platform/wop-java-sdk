@@ -165,16 +165,33 @@ class WopRequestOptionsTest {
 
     @Test
     void requestIdLengthLimit() {
-        // 128 chars OK
+        // 128 ASCII 字节 OK
         String len128 = repeat('a', 128);
         assertEquals(len128, WopRequestOptions.builder().requestId(len128).build().resolvedRequestId());
-        // 129 chars rejected
+        // 129 字节 rejected
         try {
             WopRequestOptions.builder().requestId(repeat('a', 129)).build();
-            fail("Expected WopError for 129-char requestId");
+            fail("Expected WopError for 129-byte requestId");
         } catch (WopError e) {
             assertTrue(e.getMessage().contains("128"), "Expected 128 in: " + e.getMessage());
         }
+    }
+
+    @Test
+    void requestIdLengthMeasuredInUtf8BytesNotChars() {
+        // 附录 I/I2：长度单位为 trim 后 UTF-8 编码字节数（非 UTF-16 字符数）。
+        // 中文字符 1 字符 = 1 UTF-16 单元 = 3 UTF-8 字节：100 字符仅 100 单元但 300 字节 → 必须拒
+        String cjk100 = repeat('中', 100);
+        assertEquals(100, cjk100.length());
+        try {
+            WopRequestOptions.builder().requestId(cjk100).build();
+            fail("Expected WopError: 100 CJK chars = 300 UTF-8 bytes > 128");
+        } catch (WopError e) {
+            assertTrue(e.getMessage().contains("UTF-8"), "Expected UTF-8 in: " + e.getMessage());
+        }
+        // 42 中文字符 = 126 字节 ≤ 128 → 通过
+        String cjk42 = repeat('中', 42);
+        assertEquals(cjk42, WopRequestOptions.builder().requestId(cjk42).build().resolvedRequestId());
     }
 
     private static String repeat(char c, int count) {
