@@ -129,7 +129,7 @@ public final class WopRequestOptions {
     }
 
     /**
-     * 解析后 requestId 值：null/空白时返回 null（表示透传头缺席）；
+     * 解析后 requestId 值：null/空白时返回 null（SDK 缺省生成 UUID，附录 I/I3）；
      * 有值时返回 trim 后的值（控制字符和长度在 build 时已校验）。
      */
     String resolvedRequestId() {

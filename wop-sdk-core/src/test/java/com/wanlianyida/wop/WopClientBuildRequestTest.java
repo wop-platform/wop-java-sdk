@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -44,6 +45,14 @@ class WopClientBuildRequestTest {
     private static WopClient fixedClient(Supplier<String> nonce) {
         LongSupplier clock = () -> 1_758_900_000_000L;
         return testClient("WOP-RSA3072-SHA256", nonce, clock);
+    }
+
+    /** 固定 clock/nonce/requestIdGen 的测试客户端（附录 I/I3 注入锚：全头字节级可重放）。 */
+    private static WopClient fixedClient(Supplier<String> nonce, Supplier<String> requestIdGen) {
+        LongSupplier clock = () -> 1_758_900_000_000L;
+        return new WopClient(new WopClient.Config(
+                "app_001", AlgorithmSuite.parse("WOP-RSA3072-SHA256"),
+                RSA_PRIV, RSA_PUB, 1800), clock, nonce, requestIdGen, new SecureRandom());
     }
 
     static WopClient testClient(String suite, Supplier<String> nonce, LongSupplier clock) {
@@ -209,13 +218,15 @@ class WopClientBuildRequestTest {
 
     @Test
     void deterministicReplayWithFixedClockAndNonce() {
-        // spec §2：同输入同输出（除 CSPRNG IV/nonce）——L0 注入固定 ts/nonce 字节级一致
-        WopClient client = fixedClient(NONCE);
+        // spec §2：同输入同输出（除 CSPRNG IV/nonce——附录 I/I3 将缺省 requestId 同列豁免）。
+        // 注入固定 requestIdGen 后 L0 全头字节级一致（注入契约本身即被测断言）
+        WopClient client = fixedClient(NONCE, () -> "fixedreq000000000000000000000001");
         byte[] body = Codec.utf8("{\"k\":1}");
         RequestDraft a = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0);
         RequestDraft b = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0);
         assertEquals(a.headers(), b.headers());
         assertArrayEquals(a.wireBody(), b.wireBody());
+        assertEquals("fixedreq000000000000000000000001", a.headers().get("x-wop-request-id"));
 
         // L2：DEK/IV 为 CSPRNG，headers 除 digest/encrypt 外一致
         RequestDraft c = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L2);
@@ -289,17 +300,47 @@ class WopClientBuildRequestTest {
     }
 
     @Test
-    void blankRequestIdOmitsHeaderAndValueIsTrimmed() {
-        WopClient client = fromConfigClient();
-        assertNull(client.buildRequest("GET", "/p", null, SecurityLevel.L0,
-                WopRequestOptions.builder().requestId(null).build())
-                .headers().get("x-wop-request-id"));
-        assertNull(client.buildRequest("GET", "/p", null, SecurityLevel.L0,
+    void requestIdDefaultsToGeneratedUuidAndTrimsExplicitValue() {
+        // 附录 I/I3：商户未传（null/空白）→ 缺省生成 UUID 去连字符（小写 32 hex），头恒存在
+        WopClient client = fixedClient(NONCE);
+        String generated = client.buildRequest("GET", "/p", null, SecurityLevel.L0)
+                .headers().get("x-wop-request-id");
+        assertNotNull(generated);
+        assertTrue(generated.matches("[0-9a-f]{32}"));
+        String generatedFromBlank = client.buildRequest("GET", "/p", null, SecurityLevel.L0,
                 WopRequestOptions.builder().requestId("  ").build())
-                .headers().get("x-wop-request-id"));
+                .headers().get("x-wop-request-id");
+        assertTrue(generatedFromBlank.matches("[0-9a-f]{32}"));
+        assertNotEquals(generated, generatedFromBlank);
+        // 显式传值 → trim 后原值上行（禁止二次改写）
         assertEquals("req-001", client.buildRequest("GET", "/p", null, SecurityLevel.L0,
                 WopRequestOptions.builder().requestId("  req-001  ").build())
                 .headers().get("x-wop-request-id"));
+    }
+
+    @Test
+    void outboundLogContainsFinalRequestIdValue() {
+        // 附录 I/I3 日志义务：出向构造点 INFO 日志必须含最终头值（供网关 AccessLog 关联排查）
+        java.util.logging.Logger log = java.util.logging.Logger.getLogger(WopClient.class.getName());
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        java.util.logging.Handler capture = new java.util.logging.Handler() {
+            @Override public void publish(java.util.logging.LogRecord record) {
+                lines.add(record.getMessage());
+            }
+            @Override public void flush() { }
+            @Override public void close() { }
+        };
+        log.addHandler(capture);
+        java.util.logging.Level old = log.getLevel();
+        log.setLevel(java.util.logging.Level.INFO);
+        try {
+            fixedClient(NONCE, () -> "logreq001").buildRequest("GET", "/p", null, SecurityLevel.L0);
+        } finally {
+            log.removeHandler(capture);
+            log.setLevel(old);
+        }
+        assertTrue(lines.stream().anyMatch(m -> m.contains("x-wop-request-id=logreq001")),
+                "日志行必须含最终透传头值: " + lines);
     }
 
     @Test

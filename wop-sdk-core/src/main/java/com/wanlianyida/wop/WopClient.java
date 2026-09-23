@@ -52,8 +52,8 @@ public final class WopClient {
     private static final String HEADER_ENCRYPT = "x-wop-encrypt";
 
     /**
-     * 商户请求标识透传头（不入 signedHeaders 白名单——网关按冻结清单重算 canonical 验签，
-     * 多一头直接导致签名不匹配）。
+     * 商户请求标识透传头（wop-specs 附录 I；不入 signedHeaders 白名单——网关按冻结清单
+     * 重算 canonical 验签，多一头直接导致签名不匹配）。恒存在：商户传值或缺省 UUID 自生成。
      */
     private static final String HEADER_REQUEST_ID = "x-wop-request-id";
 
@@ -75,20 +75,33 @@ public final class WopClient {
     private final PublicKey platformPublicKey;
     private final LongSupplier clock;
     private final Supplier<String> nonceGen;
+    /** 附录 I/I3：缺省 requestId 生成器（商户未传时每次请求生成）。 */
+    private final Supplier<String> requestIdGen;
     private final SecureRandom random;
+
+    /** 出向日志（附录 I/I3 日志义务）：JUL 零依赖，INFO 级打印最终透传头值。 */
+    private static final java.util.logging.Logger OUT_LOG =
+            java.util.logging.Logger.getLogger(WopClient.class.getName());
 
     /** 测试便捷构造（随机源退默认 CSPRNG）。 */
     WopClient(Config config, LongSupplier clock, Supplier<String> nonceGen) {
-        this(config, null, null, clock, nonceGen, new SecureRandom());
+        this(config, null, null, clock, nonceGen, null, new SecureRandom());
     }
 
     /** 全量确定性钩子（interop 联调合同）：时钟/nonce/随机源可注入；生产走 Builder 默认 CSPRNG。 */
     WopClient(Config config, LongSupplier clock, Supplier<String> nonceGen, SecureRandom random) {
-        this(config, null, null, clock, nonceGen, random);
+        this(config, null, null, clock, nonceGen, null, random);
+    }
+
+    /** 全量确定性钩子 + 附录 I/I3 注入锚：缺省 requestId 生成器与 clock/nonce 同级可注入。 */
+    WopClient(Config config, LongSupplier clock, Supplier<String> nonceGen,
+              Supplier<String> requestIdGen, SecureRandom random) {
+        this(config, null, null, clock, nonceGen, requestIdGen, random);
     }
 
     private WopClient(Config config, WopSdkConfig sdkConfig, Transport transport,
-                      LongSupplier clock, Supplier<String> nonceGen, SecureRandom random) {
+                      LongSupplier clock, Supplier<String> nonceGen, Supplier<String> requestIdGen,
+                      SecureRandom random) {
         this.config = config;
         this.sdkConfig = sdkConfig;
         this.defaultRequestContext = sdkConfig == null
@@ -100,7 +113,13 @@ public final class WopClient {
         this.platformPublicKey = KeyCodec.parsePublicKey(config.platformPublicKey(), suite);
         this.clock = clock;
         this.nonceGen = nonceGen;
+        this.requestIdGen = requestIdGen != null ? requestIdGen : defaultRequestIdSupplier();
         this.random = random;
+    }
+
+    /** 缺省 requestId 生成器（附录 I/I3）：UUID 去连字符，小写 32 位 hex（v4 语义）。 */
+    private static Supplier<String> defaultRequestIdSupplier() {
+        return () -> java.util.UUID.randomUUID().toString().replace("-", "");
     }
 
     /** 创建 {@link Builder}。 */
@@ -136,7 +155,7 @@ public final class WopClient {
                 config.platformPublicKey(),
                 config.expiredSeconds());
         return new WopClient(clientConfig, config, resolvedTransport,
-                System::currentTimeMillis, defaultNonceSupplier(), new SecureRandom());
+                System::currentTimeMillis, defaultNonceSupplier(), null, new SecureRandom());
     }
 
     /** 丢弃默认实例与初始化状态（轮换须先 {@link WopSdkConfigLoader#clearCache()}，K26）。 */
@@ -164,9 +183,7 @@ public final class WopClient {
         ConfigUrlUtils.validateApiPath(path);
         String resolvedReqId = (options != null) ? options.resolvedRequestId() : null;
         boolean hasOverrides = (options != null) && options.hasConfigOverrides();
-        if (hasOverrides && sdkConfig == null) {
-            throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
-        }
+        // transport 非空 ⟹ 经 fromConfig 构造 ⟹ sdkConfig 非空，无重复防御分支（100% 覆盖门禁）
         WopRequestContext ctx = hasOverrides ? resolveContext(options) : defaultRequestContext;
         RequestDraft draft = buildRequestInternal(method, path, body, level,
                 hasOverrides ? ctx.outbound() : null, resolvedReqId);
@@ -273,10 +290,12 @@ public final class WopClient {
                 Codec.utf8(effectiveAppKey));
         headers.put(HEADER_SIGN, SignHeader.build(effectiveSuite.securityReq(), effectiveExpired,
                 signedHeaders, Codec.b64UrlEncode(signature)));
-        // requestId 在签名落盘后写入，保证不在 signedHeaders 白名单中（网关按冻结清单重算验签）
-        if (requestId != null) {
-            headers.put(HEADER_REQUEST_ID, requestId);
-        }
+        // requestId 在签名落盘后写入，保证不在 signedHeaders 白名单中（网关按冻结清单重算验签，附录 I/I1）；
+        // 商户未传 → 缺省生成（附录 I/I3：UUID 去连字符），最终头恒存在
+        String effectiveRequestId = requestId != null ? requestId : requestIdGen.get();
+        headers.put(HEADER_REQUEST_ID, effectiveRequestId);
+        // 附录 I/I3 日志义务：INFO 级打印最终透传头值（非敏感，豁免脱敏），供网关 AccessLog 关联排查
+        OUT_LOG.info(() -> "x-wop-request-id=" + effectiveRequestId + " " + upperMethod + " " + path);
 
         return new RequestDraft(upperMethod, path, headers, wireBody);
     }
@@ -335,9 +354,7 @@ public final class WopClient {
     }
 
     private WopRequestContext resolveContext(WopRequestOptions options) {
-        if (options == null || !options.hasConfigOverrides()) {
-            return defaultRequestContext;
-        }
+        // 调用方（execute/buildRequest）已保证 options 非空且含配置覆盖
         return WopRequestContext.resolve(sdkConfig, options);
     }
 

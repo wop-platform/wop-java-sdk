@@ -203,12 +203,22 @@ class WopRequestOptionsTest {
         assertFalse(onlyReqId.hasConfigOverrides());
         assertFalse(onlyReqId.isEmpty()); // isEmpty 仍考虑 requestId
 
-        // appKey → hasConfigOverrides = true
-        WopRequestOptions withAppKey = WopRequestOptions.builder().appKey("app").requestId("req").build();
-        assertTrue(withAppKey.hasConfigOverrides());
+        // 逐字段覆盖短路 OR 链的每个分支位（前序全 false + 当前字段 true）
+        assertTrue(single(b -> b.appKey("app")).hasConfigOverrides());
+        assertTrue(single(b -> b.suite("WOP-RSA3072-SHA256")).hasConfigOverrides());
+        assertTrue(single(b -> b.merchantPrivateKey("k")).hasConfigOverrides());
+        assertTrue(single(b -> b.platformPublicKey("p")).hasConfigOverrides());
+        assertTrue(single(b -> b.expiredSeconds(60L)).hasConfigOverrides());
+        assertTrue(single(b -> b.serverRoot("https://gw.example.com")).hasConfigOverrides());
+        assertTrue(single(b -> b.connectTimeout(1)).hasConfigOverrides());
+        assertTrue(single(b -> b.readTimeout(1)).hasConfigOverrides());
 
-        // none → hasConfigOverrides = false
+        // none → false
         assertFalse(WopRequestOptions.none().hasConfigOverrides());
+    }
+
+    private static WopRequestOptions single(java.util.function.UnaryOperator<WopRequestOptions.Builder> fn) {
+        return fn.apply(WopRequestOptions.builder()).build();
     }
 
     private static WopRequestOptions full(String appKey, String suite, String merchant, String platform,
