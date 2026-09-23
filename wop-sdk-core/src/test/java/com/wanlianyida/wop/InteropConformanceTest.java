@@ -183,10 +183,14 @@ public class InteropConformanceTest {
             Set<String> opaque = new HashSet<>();
             expected.path("opaque").forEach(o -> opaque.add(o.asText()));
             JsonNode expectedHeaders = expected.path("headers");
-            assertEquals(expectedHeaders.size(), draft.headers().size(), id + ": 头集合不一致");
+            // x-wop-request-id 是规格附录 I 的可选透传头（恒不入签、网关日志关联用），
+            // 不属于 interop 冻结的协议头合同（fixture sha256 钉死不可改），比对前剥离
+            Map<String, String> protocolHeaders = new java.util.LinkedHashMap<>(draft.headers());
+            protocolHeaders.remove("x-wop-request-id");
+            assertEquals(expectedHeaders.size(), protocolHeaders.size(), id + ": 头集合不一致");
             for (Map.Entry<String, JsonNode> want : asIterable(expectedHeaders)) {
                 String name = want.getKey().toLowerCase(Locale.ROOT);
-                String got = draft.headers().get(name);
+                String got = protocolHeaders.get(name);
                 assertNotNull(got, id + ": 缺头 " + want.getKey());
                 String wantValue = want.getValue().asText();
                 if (opaque.contains("x-wop-sign.signatureSegment") && "x-wop-sign".equals(name)) {

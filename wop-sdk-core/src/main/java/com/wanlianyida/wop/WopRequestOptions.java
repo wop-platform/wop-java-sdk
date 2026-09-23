@@ -8,7 +8,7 @@ import java.util.Objects;
 public final class WopRequestOptions {
 
     private static final WopRequestOptions NONE = new WopRequestOptions(
-            null, null, null, null, 0L, null, 0, 0);
+            null, null, null, null, 0L, null, 0, 0, null);
 
     private final String appKey;
     private final String suite;
@@ -18,10 +18,11 @@ public final class WopRequestOptions {
     private final String serverRoot;
     private final int connectTimeout;
     private final int readTimeout;
+    private final String requestId;
 
     private WopRequestOptions(String appKey, String suite, String merchantPrivateKey,
                               String platformPublicKey, long expiredSeconds, String serverRoot,
-                              int connectTimeout, int readTimeout) {
+                              int connectTimeout, int readTimeout, String requestId) {
         this.appKey = appKey;
         this.suite = suite;
         this.merchantPrivateKey = merchantPrivateKey;
@@ -30,6 +31,7 @@ public final class WopRequestOptions {
         this.serverRoot = serverRoot;
         this.connectTimeout = connectTimeout;
         this.readTimeout = readTimeout;
+        this.requestId = requestId;
     }
 
     /** 无覆盖（复用预解析默认上下文，§6.4）。 */
@@ -76,6 +78,11 @@ public final class WopRequestOptions {
         return readTimeout;
     }
 
+    /** 商户请求标识（透传网关用，不参与签名）。null = 未设置。 */
+    public String requestId() {
+        return requestId;
+    }
+
     /** 是否设置了非空 appKey。 */
     public boolean hasAppKey() {
         return appKey != null && !appKey.trim().isEmpty();
@@ -116,11 +123,39 @@ public final class WopRequestOptions {
         return readTimeout > 0;
     }
 
+    /** 是否设置了非空 requestId。 */
+    public boolean hasRequestId() {
+        return requestId != null && !requestId.trim().isEmpty();
+    }
+
+    /**
+     * 解析后 requestId 值：null/空白时返回 null（SDK 缺省生成 UUID，附录 I/I3）；
+     * 有值时返回 trim 后的值（控制字符和长度在 build 时已校验）。
+     */
+    String resolvedRequestId() {
+        if (requestId == null) {
+            return null;
+        }
+        String trimmed = requestId.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * 是否存在请求级配置覆盖（appKey/suite/keys/expiry/serverRoot/timeout）。
+     * 仅含 requestId 时返回 false——此时 buildRequest 不需要 sdkConfig。
+     */
+    boolean hasConfigOverrides() {
+        return hasAppKey() || hasSuite() || hasMerchantPrivateKey()
+                || hasPlatformPublicKey() || hasExpiredSeconds()
+                || hasServerRoot() || hasConnectTimeout() || hasReadTimeout();
+    }
+
     /** 是否无任何有效覆盖（与 {@link #none()} 值等价）。 */
     public boolean isEmpty() {
         return !hasAppKey() && !hasSuite() && !hasMerchantPrivateKey()
                 && !hasPlatformPublicKey() && !hasExpiredSeconds()
-                && !hasServerRoot() && !hasConnectTimeout() && !hasReadTimeout();
+                && !hasServerRoot() && !hasConnectTimeout() && !hasReadTimeout()
+                && !hasRequestId();
     }
 
     public static final class Builder {
@@ -133,6 +168,7 @@ public final class WopRequestOptions {
         private String serverRoot;
         private int connectTimeout;
         private int readTimeout;
+        private String requestId;
 
         public Builder appKey(String appKey) {
             this.appKey = appKey;
@@ -183,9 +219,43 @@ public final class WopRequestOptions {
             return this;
         }
 
+        /**
+         * 商户请求标识（wop-specs 附录 I：不参与签名的透传头，须为不含个人数据的不透明关联标识）；
+         * null 或空白 → 缺省生成 UUID（头恒存在）；构造时校验：控制字符（trim 前原值扫描，CR/LF/NUL/DEL）
+         * 与超长（trim 后 UTF-8 字节 &gt; 128）均抛配置异常。
+         */
+        public Builder requestId(String requestId) {
+            this.requestId = requestId;
+            return this;
+        }
+
         public WopRequestOptions build() {
+            validateRequestId(requestId);
             return new WopRequestOptions(appKey, suite, merchantPrivateKey, platformPublicKey,
-                    expiredSeconds, serverRoot, connectTimeout, readTimeout);
+                    expiredSeconds, serverRoot, connectTimeout, readTimeout, requestId);
+        }
+
+        private static void validateRequestId(String requestId) {
+            if (requestId == null) {
+                return;
+            }
+            // 先查原始值（trim 前）防首尾控制字符注入 CR/LF/NUL/DEL（附录 I/I2）
+            for (int i = 0; i < requestId.length(); i++) {
+                char c = requestId.charAt(i);
+                if (c < 0x20 || c == 0x7f) {
+                    throw WopError.configuration("requestId 含控制字符（防头注入）: " + (int) c);
+                }
+            }
+            String trimmed = requestId.trim();
+            if (trimmed.isEmpty()) {
+                return;
+            }
+            // 附录 I/I2：长度上限按 trim 后 UTF-8 编码字节数（网关 header 缓冲按字节计；
+            // 非 ASCII 下 UTF-16 计长会低估线上字节，须显式编码后计量）
+            int utf8Length = trimmed.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            if (utf8Length > 128) {
+                throw WopError.configuration("requestId UTF-8 字节长度不能超过 128（实际 " + utf8Length + "）");
+            }
         }
     }
 
@@ -205,13 +275,14 @@ public final class WopRequestOptions {
                 && Objects.equals(suite, that.suite)
                 && Objects.equals(merchantPrivateKey, that.merchantPrivateKey)
                 && Objects.equals(platformPublicKey, that.platformPublicKey)
-                && Objects.equals(serverRoot, that.serverRoot);
+                && Objects.equals(serverRoot, that.serverRoot)
+                && Objects.equals(requestId, that.requestId);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(appKey, suite, merchantPrivateKey, platformPublicKey, expiredSeconds,
-                serverRoot, connectTimeout, readTimeout);
+                serverRoot, connectTimeout, readTimeout, requestId);
     }
 
     /** K16：日志/toString 凭证打码。 */
@@ -222,6 +293,7 @@ public final class WopRequestOptions {
                 + ", expiredSeconds=" + expiredSeconds
                 + ", serverRoot=" + serverRoot
                 + ", connectTimeout=" + connectTimeout
-                + ", readTimeout=" + readTimeout + ']';
+                + ", readTimeout=" + readTimeout
+                + ", requestId=" + requestId + ']';
     }
 }
