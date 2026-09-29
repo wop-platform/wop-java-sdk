@@ -150,6 +150,31 @@ class JdkHttpTransportFaultInjectionTest {
     }
 
     @Test
+    void unauthorizedErrorEnvelopeBodyReadable() throws Exception {
+        // 契约：401 认证错误的信封体必须可读。streaming 模式（setFixedLengthStreamingMode）
+        // 下 JDK 遇 401/407 会断连并丢弃错误响应体（getErrorStream() 恒 null，长度校验
+        // 误报"响应体被截断"），故请求体须走默认缓冲模式发送（wire 本就是内存 byte[]）。
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/p", exchange -> {
+            byte[] out = "{\"code\":\"OP_GW_1001\",\"message\":\"appKey 为空或应用不存在\"}"
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(401, out.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(out);
+            }
+        });
+        server.start();
+        JdkHttpTransport transport = new JdkHttpTransport(
+                "http://127.0.0.1:" + server.getAddress().getPort());
+        TransportResponse response = transport.send(
+                new RequestDraft("POST", "/p", headers(), new byte[]{1}));
+        assertEquals(401, response.statusCode());
+        // 完整信封等值比对：contains 断言对畸形/截断 JSON 仍会通过
+        assertEquals("{\"code\":\"OP_GW_1001\",\"message\":\"appKey 为空或应用不存在\"}",
+                new String(response.body(), java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    @Test
     void interruptedDuringResponseFails() throws Exception {
         // 中途中断：handler 在写响应前 interrupt 调用线程（HttpURLConnection 阻塞
         // I/O 本身不响应中断）→ 响应状态返回后的阶段边界检查命中并失败，

@@ -145,8 +145,22 @@ _sr_clean() {  # 0=干净 1=有 issue 2=CLI 异常
 SR_GATE_ON=0
 if [ "$MODE" = apply ] && command -v sourcery >/dev/null 2>&1; then
   SR_GATE_ON=1
-  _sr_clean && echo "Sourcery 回归闸基线: .factory 干净" \
-            || { echo "Sourcery 回归闸基线: .factory 已有 issue——先清零再追平（闸口径=PR gate）" >&2; exit 2; }
+  # 版本口径提示（issue #104）：本地 CLI 版本与上游 CI pin 不一致时，
+  # 上游已清零的快照本地可报 issue——先排除口径差异再查真实回归。
+  # rc 区分（Sourcery 审查）：1=有 issue（才可能是版本口径差异）；
+  # ≥2=CLI 执行失败，误诊为版本漂移会误导排查
+  if _sr_clean; then
+    echo "Sourcery 回归闸基线: .factory 干净"
+  else
+    sr_status=$?
+    if [ "$sr_status" -eq 1 ]; then
+      echo "Sourcery 回归闸基线: .factory 已有 issue——先清零再追平（闸口径=PR gate）。" \
+           "若上游 CI 曾全绿：疑似本地 CLI 版本口径差异（本地 $(sourcery --version 2>/dev/null || echo '?') vs 上游 sourcery-review-gate.yml 的 pin），对齐版本后复跑再定" >&2
+    else
+      echo "Sourcery 回归闸执行失败（CLI 异常，退出码=$sr_status）——请检查本地 CLI 后重试" >&2
+    fi
+    exit 2
+  fi
 fi
 
 # 上游 mode+blob（git show 丢 mode，覆盖后须恢复执行位）
@@ -171,7 +185,7 @@ while IFS=$'\t' read -r kind rel; do
     echo "  [$kind] $rel: 本地缺失"
     [ "$kind" = full ] && DRIFT=1
     if [ "$MODE" = apply ] && [ "$kind" = full ]; then
-      mkdir -p "$(dirname "$dst")" # 缺失父目录先建（wop-skills：tests/ 整缺，重定向即崩）
+      mkdir -p "$(dirname "$dst")" # 缺失父目录先建（xx-skills：tests/ 整缺，重定向即崩）
       # tmp+mv 原子替换（#103）：$dst 可能是运行中脚本自身——bash 惰性逐段
       # 读源文件，`> "$dst"` 直写截断同 inode，旧读位移落在新内容中途即
       # syntax error 半同步态；同目录 rename 换 inode，旧 inode 保活至跑完

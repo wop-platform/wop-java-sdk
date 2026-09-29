@@ -96,6 +96,23 @@ class UnirestTransportFaultInjectionTest {
     }
 
     @Test
+    void unauthorizedErrorEnvelopeBodyReadable() throws Exception {
+        // 跨适配器 401 回归哨兵（对齐 jdkhttp）：JDK HttpURLConnection 在 streaming 模式下
+        // 遇 401/407 断连丢错误体是 JDK 专有缺陷；Unirest RawResponse 无此机制，信封体恒可读。
+        // 同时验证附录 I 透传头随适配器原样上行。
+        String envelope = "{\"code\":\"OP_GW_1001\",\"message\":\"appKey 为空或应用不存在\"}";
+        server.enqueue(new MockResponse().setResponseCode(401).setBody(envelope));
+        server.start();
+        UnirestTransport transport = new UnirestTransport(server.url("/").toString());
+        TransportResponse response = transport.send(new RequestDraft("POST", "/p",
+                headers("x-wop-request-id", "req-401"), new byte[]{1}));
+        assertEquals(401, response.statusCode());
+        // 完整信封等值比对：contains 断言对畸形/截断 JSON 仍会通过
+        assertEquals(envelope, new String(response.body(), StandardCharsets.UTF_8));
+        assertEquals("req-401", server.takeRequest().getHeader("x-wop-request-id"));
+    }
+
+    @Test
     void responseHeaderNamesNormalizedToLowercase() throws Exception {
         server.enqueue(new MockResponse().setResponseCode(200).setBody("x")
                 .setHeader("X-Wop-Sign", "WOP-RSA3072-SHA256 v1/1800/a/b"));
