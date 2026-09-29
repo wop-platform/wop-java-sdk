@@ -1,7 +1,7 @@
 # wop-java-sdk
 
 [![CI](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/github/license/wop-platform/wop-java-sdk)](LICENSE) [![Release](https://img.shields.io/github/v/release/wop-platform/wop-java-sdk)](https://github.com/wop-platform/wop-java-sdk/releases) [![Maven Central](https://img.shields.io/maven-central/v/com.wanlianyida/wop-java-sdk)](https://central.sonatype.com/artifact/com.wanlianyida/wop-java-sdk)
-[![Java 8+](https://img.shields.io/badge/java-8%2B-orange?logo=openjdk&logoColor=white)](https://openjdk.org/) [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A598%25%20(gate)-yellow)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![Gherkin](https://img.shields.io/badge/bdd-19%20scenarios-orange)](wop-sdk-core/src/test/resources/features/wop-sdk-usage.feature) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Java 8+](https://img.shields.io/badge/java-8%2B-orange?logo=openjdk&logoColor=white)](https://openjdk.org/) [![Coverage](https://img.shields.io/badge/coverage-100%25%20(gate)-yellow)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![Gherkin](https://img.shields.io/badge/bdd-19%20scenarios-orange)](wop-sdk-core/src/test/resources/features/wop-sdk-usage.feature) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 
 > **WOP · 万联易达开放平台** 官方 Java SDK —— 协议与黄金向量真源：[wop-specs](https://github.com/wop-platform/wop-specs)
@@ -22,6 +22,8 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 | `wop-sdk-unirest` | Kong Unirest 4.x 适配器（unirest-java-core 依赖 `provided`，商户自带版本；运行时要求 Java 11+，上游 4.x 字节码 major 55） |
 
 支持套件：`WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。
+
+> **JDK 适配器内存画像（`wop-sdk-jdkhttp`）**：请求体经 `HttpURLConnection` 默认缓冲模式发送——streaming 模式遇 401/407 挑战会丢弃错误响应体（`getErrorStream()` 恒 null），缓冲是唯一正确解——发送期间峰值内存约为请求体字节数的 2 倍；响应侧仍为 11MB 流式读取。超大请求体场景建议改用 okhttp/unirest 适配器。
 
 ## 配置层一站式接入（wop-sdk-config-spec）
 
@@ -160,7 +162,7 @@ VerifyResult callback = client.verifyCallback(headers, rawBody, "/merchant/callb
 
 ```bash
 mvn verify
-# 全量测试（含向量 conformance 套件）+ JaCoCo 行/分支 ≥98% 门禁
+# 全量测试（含向量 conformance 套件）+ JaCoCo 行/分支 100% 门禁
 ```
 
 向量覆盖面（字节级断言 + 全负向量）：SHA-256/SM3 摘要与 digest 头、AES-256-GCM/SM4-GCM

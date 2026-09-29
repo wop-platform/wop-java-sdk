@@ -1,7 +1,7 @@
 # wop-java-sdk
 
 [![CI](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/github/license/wop-platform/wop-java-sdk)](LICENSE) [![Release](https://img.shields.io/github/v/release/wop-platform/wop-java-sdk)](https://github.com/wop-platform/wop-java-sdk/releases) [![Maven Central](https://img.shields.io/maven-central/v/com.wanlianyida/wop-java-sdk)](https://central.sonatype.com/artifact/com.wanlianyida/wop-java-sdk)
-[![Java 8+](https://img.shields.io/badge/java-8%2B-orange?logo=openjdk&logoColor=white)](https://openjdk.org/) [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A598%25%20(gate)-yellow)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![Gherkin](https://img.shields.io/badge/bdd-19%20scenarios-orange)](wop-sdk-core/src/test/resources/features/wop-sdk-usage.feature) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Java 8+](https://img.shields.io/badge/java-8%2B-orange?logo=openjdk&logoColor=white)](https://openjdk.org/) [![Coverage](https://img.shields.io/badge/coverage-100%25%20(gate)-yellow)](https://github.com/wop-platform/wop-java-sdk/actions/workflows/ci.yml) [![Gherkin](https://img.shields.io/badge/bdd-19%20scenarios-orange)](wop-sdk-core/src/test/resources/features/wop-sdk-usage.feature) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-java-sdk?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-java-sdk&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 
 Official Java client for the WOP gateway merchant side: encapsulates the protocol
@@ -22,6 +22,8 @@ wire byte formats.
 | `wop-sdk-unirest` | Kong Unirest 4.x adapter (unirest-java-core dependency is `provided`; bring your own version) |
 
 Supported suites: `WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
+
+> **JDK adapter memory profile (`wop-sdk-jdkhttp`)**: request bodies are sent through `HttpURLConnection`'s default buffering mode — in streaming mode the JDK discards 401/407 challenge response bodies (`getErrorStream()` is always null), so buffering is the only correct option — meaning peak memory during a send is roughly 2x the request body size; response reading still streams under the 11MB cap. For very large request bodies prefer the okhttp/unirest adapters.
 
 ## Quick Start
 
@@ -116,7 +118,7 @@ access to raw.githubusercontent.com):
 
 ```bash
 mvn verify
-# Full test run (including the vector conformance suite) + JaCoCo line/branch >= 98% gate
+# Full test run (including the vector conformance suite) + JaCoCo line/branch = 100% gate
 ```
 
 Vector coverage (byte-level assertions + all negative vectors): SHA-256/SM3 digests
