@@ -8,7 +8,7 @@ import java.util.Objects;
 public final class WopRequestOptions {
 
     private static final WopRequestOptions NONE = new WopRequestOptions(
-            null, null, null, null, 0L, null, 0, 0, null);
+            null, null, null, null, 0L, null, 0, 0, null, null);
 
     private final String appKey;
     private final String suite;
@@ -19,10 +19,12 @@ public final class WopRequestOptions {
     private final int connectTimeout;
     private final int readTimeout;
     private final String requestId;
+    private final String subMchId;
 
     private WopRequestOptions(String appKey, String suite, String merchantPrivateKey,
                               String platformPublicKey, long expiredSeconds, String serverRoot,
-                              int connectTimeout, int readTimeout, String requestId) {
+                              int connectTimeout, int readTimeout, String requestId,
+                              String subMchId) {
         this.appKey = appKey;
         this.suite = suite;
         this.merchantPrivateKey = merchantPrivateKey;
@@ -32,6 +34,7 @@ public final class WopRequestOptions {
         this.connectTimeout = connectTimeout;
         this.readTimeout = readTimeout;
         this.requestId = requestId;
+        this.subMchId = subMchId;
     }
 
     /** 无覆盖（复用预解析默认上下文，§6.4）。 */
@@ -83,6 +86,14 @@ public final class WopRequestOptions {
         return requestId;
     }
 
+    /**
+     * 子商户身份（ISV D-13）：出向写入 {@code x-wop-sub-mch-id} 头并参与签名，
+     * 值 = 子商户 {@code plf_co_id}。null/空白 = 未设置（应用自身身份，头缺席）。
+     */
+    public String subMchId() {
+        return subMchId;
+    }
+
     /** 是否设置了非空 appKey。 */
     public boolean hasAppKey() {
         return appKey != null && !appKey.trim().isEmpty();
@@ -128,6 +139,11 @@ public final class WopRequestOptions {
         return requestId != null && !requestId.trim().isEmpty();
     }
 
+    /** 是否设置了非空 subMchId。 */
+    public boolean hasSubMchId() {
+        return subMchId != null && !subMchId.trim().isEmpty();
+    }
+
     /**
      * 解析后 requestId 值：null/空白时返回 null（SDK 缺省生成 UUID，附录 I/I3）；
      * 有值时返回 trim 后的值（控制字符和长度在 build 时已校验）。
@@ -141,8 +157,20 @@ public final class WopRequestOptions {
     }
 
     /**
+     * 解析后 subMchId 值：null/空白时返回 null（头缺席 = 应用自身身份，AC-20 零回归）；
+     * 有值时返回 trim 后的值（可打印 ASCII、内部空白与长度在 build 时已校验）。
+     */
+    String resolvedSubMchId() {
+        if (subMchId == null) {
+            return null;
+        }
+        String trimmed = subMchId.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
      * 是否存在请求级配置覆盖（appKey/suite/keys/expiry/serverRoot/timeout）。
-     * 仅含 requestId 时返回 false——此时 buildRequest 不需要 sdkConfig。
+     * 仅含 requestId/subMchId 时返回 false——此时 buildRequest 不需要 sdkConfig。
      */
     boolean hasConfigOverrides() {
         return hasAppKey() || hasSuite() || hasMerchantPrivateKey()
@@ -150,12 +178,22 @@ public final class WopRequestOptions {
                 || hasServerRoot() || hasConnectTimeout() || hasReadTimeout();
     }
 
+    /**
+     * 是否存在入向验签凭证覆盖（appKey/suite/双钥）。仅含 requestId/subMchId 等出向字段、
+     * 或 serverRoot/connectTimeout/readTimeout/expiredSeconds 等传输字段时返回 false——
+     * 入向验签直接走默认凭证，不要求 fromConfig 客户端（0.3.0 起有意放宽：此前任何非空
+     * options 在无 sdkConfig 客户端上都会抛 configuration）。
+     */
+    boolean hasInboundOverrides() {
+        return hasAppKey() || hasSuite() || hasMerchantPrivateKey() || hasPlatformPublicKey();
+    }
+
     /** 是否无任何有效覆盖（与 {@link #none()} 值等价）。 */
     public boolean isEmpty() {
         return !hasAppKey() && !hasSuite() && !hasMerchantPrivateKey()
                 && !hasPlatformPublicKey() && !hasExpiredSeconds()
                 && !hasServerRoot() && !hasConnectTimeout() && !hasReadTimeout()
-                && !hasRequestId();
+                && !hasRequestId() && !hasSubMchId();
     }
 
     public static final class Builder {
@@ -169,6 +207,7 @@ public final class WopRequestOptions {
         private int connectTimeout;
         private int readTimeout;
         private String requestId;
+        private String subMchId;
 
         public Builder appKey(String appKey) {
             this.appKey = appKey;
@@ -229,10 +268,22 @@ public final class WopRequestOptions {
             return this;
         }
 
+        /**
+         * 子商户身份（ISV D-13）：出向写入 {@code x-wop-sub-mch-id} 并纳入 signedHeaders，
+         * 值 = 子商户 {@code plf_co_id}；null/空白 = 未设置（应用自身身份，头缺席）。
+         * 构造时校验：仅可打印 ASCII（0x20~0x7E，防头注入/签名歧义）、trim 后无内部空白、
+         * trim 后长度 ≤ 128；违规抛配置异常。
+         */
+        public Builder subMchId(String subMchId) {
+            this.subMchId = subMchId;
+            return this;
+        }
+
         public WopRequestOptions build() {
             validateRequestId(requestId);
+            validateSubMchId(subMchId);
             return new WopRequestOptions(appKey, suite, merchantPrivateKey, platformPublicKey,
-                    expiredSeconds, serverRoot, connectTimeout, readTimeout, requestId);
+                    expiredSeconds, serverRoot, connectTimeout, readTimeout, requestId, subMchId);
         }
 
         private static void validateRequestId(String requestId) {
@@ -257,6 +308,31 @@ public final class WopRequestOptions {
                 throw WopError.configuration("requestId UTF-8 字节长度不能超过 128（实际 " + utf8Length + "）");
             }
         }
+
+        /** 子商户头值守卫：可打印 ASCII、无内部空白、trim 后 ≤128（防头注入与签名/身份歧义）。 */
+        private static void validateSubMchId(String subMchId) {
+            if (subMchId == null) {
+                return;
+            }
+            // 仅可打印 ASCII：CR/LF/NUL 等控制字符防头注入，非 ASCII 在 Servlet/OkHttp 头编码下不可靠
+            for (int i = 0; i < subMchId.length(); i++) {
+                char c = subMchId.charAt(i);
+                if (c < 0x20 || c > 0x7e) {
+                    throw WopError.configuration("subMchId 须为可打印 ASCII（防头注入/签名歧义）: " + (int) c);
+                }
+            }
+            String trimmed = subMchId.trim();
+            if (trimmed.isEmpty()) {
+                return;
+            }
+            // 网关 canonical 的 trimall 会折叠内部空白，而身份查询只做 trim——内部空白破坏签名与身份一一对应
+            if (trimmed.indexOf(' ') >= 0) {
+                throw WopError.configuration("subMchId 不能包含内部空白");
+            }
+            if (trimmed.length() > 128) {
+                throw WopError.configuration("subMchId 长度不能超过 128（实际 " + trimmed.length() + "）");
+            }
+        }
     }
 
     @Override
@@ -276,13 +352,14 @@ public final class WopRequestOptions {
                 && Objects.equals(merchantPrivateKey, that.merchantPrivateKey)
                 && Objects.equals(platformPublicKey, that.platformPublicKey)
                 && Objects.equals(serverRoot, that.serverRoot)
-                && Objects.equals(requestId, that.requestId);
+                && Objects.equals(requestId, that.requestId)
+                && Objects.equals(subMchId, that.subMchId);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(appKey, suite, merchantPrivateKey, platformPublicKey, expiredSeconds,
-                serverRoot, connectTimeout, readTimeout, requestId);
+                serverRoot, connectTimeout, readTimeout, requestId, subMchId);
     }
 
     /** K16：日志/toString 凭证打码。 */
@@ -294,6 +371,7 @@ public final class WopRequestOptions {
                 + ", serverRoot=" + serverRoot
                 + ", connectTimeout=" + connectTimeout
                 + ", readTimeout=" + readTimeout
-                + ", requestId=" + requestId + ']';
+                + ", requestId=" + requestId
+                + ", subMchId=" + subMchId + ']';
     }
 }

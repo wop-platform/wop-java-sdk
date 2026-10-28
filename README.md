@@ -11,7 +11,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 
 - 协议真源：[crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md)（v0.4-draft）+ [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/docs/specs/wop-sdk-spec.md)（v1.0-ratified）
 - 向量真源：[crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json)（构建期按 commit SHA 钉版拉取 + sha256 校验，本仓不保留副本）
-- JDK 8+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.2.0；unirest 适配器运行时要求 Java 11+，JDK 8 用户请用 okhttp/jdkhttp 适配器）
+- JDK 8+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.3.0；unirest 适配器运行时要求 Java 11+，JDK 8 用户请用 okhttp/jdkhttp 适配器）
 - 运行时依赖仅 BouncyCastle（国密 SM2/SM3/SM4 唯一路径）
 
 | 模块 | 说明 |
@@ -34,7 +34,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-jdkhttp</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
@@ -73,6 +73,19 @@ WopClient client = WopClient.builder()
 请求级覆盖：`WopRequestOptions.builder().appKey(...).serverRoot(...).build()` 传入
 `execute(..., options)` / `buildRequest(..., options)` / `verifyCallback(..., options)`。
 
+ISV 子商户身份（D-13）：代子商户调用业务 API 时，按请求传 `subMchId`（值 = 子商户 `plf_co_id`）：
+
+```java
+RequestDraft draft = client.buildRequest("POST", "/gateway/order/create", body, SecurityLevel.L0,
+        WopRequestOptions.builder().subMchId("PLF-SUB-001").build());
+```
+
+SDK 自动写入 `x-wop-sub-mch-id` 并纳入 `x-wop-sign` 的 signedHeaders（仅首尾 ASCII 空格会被
+trim；可打印 ASCII、无内部空白、≤128 字符，控制字符含 tab/换行即便在首尾也在构造期拒绝）。
+**网关前置**：需网关已部署 ISV D-13 版本且该应用灰度放行，才会按子商户身份鉴权；在此之前携带
+该头会被网关忽略（按应用自身身份执行），请勿在网关就绪前启用。
+不传 = 应用自身身份，头缺席，行为与旧版逐字节一致。
+
 > **Unirest 适配器（K9）**：`connectTimeout` 为实例级，请求级 connect 覆盖不生效；`readTimeout` 可按请求设置。
 
 ## 快速开始（分步 API）
@@ -81,26 +94,26 @@ WopClient client = WopClient.builder()
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-core</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 
 <!-- 可选适配器（三选一）：okhttp / unirest 的客户端依赖 scope=provided（商户自带版本，unirest 即 com.konghq:unirest-java-core） / jdkhttp 零额外依赖。unirest 适配器默认自建 UnirestInstance，长期运行建议经构造器注入复用单例并统一关闭。适配器经 META-INF/services 注册，可由 core 的 TransportFactory.discover()（ServiceLoader）解析——要求 classpath 恰一适配器，零/多均以配置错误 fail-fast -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 <!-- 或 -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-jdkhttp</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 <!-- 或 -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-unirest</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 

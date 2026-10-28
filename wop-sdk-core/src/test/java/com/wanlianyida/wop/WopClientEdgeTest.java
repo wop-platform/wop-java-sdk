@@ -6,6 +6,8 @@ import com.wanlianyida.wop.crypto.TestVectors;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -143,6 +145,36 @@ class WopClientEdgeTest {
                 Collections.emptyMap(), Codec.utf8("x"), "/p",
                 WopRequestOptions.builder().appKey("x").build()));
         assertTrue(e.getMessage().contains("凭证覆盖需要经 fromConfig 构造的客户端"), e.getMessage());
+    }
+
+    @Test
+    void legacyVerifyResponseIgnoresTransportOnlyOverrides() {
+        // 0.3.0 语义变更锁定：仅 serverRoot/超时/expiredSeconds（无凭证字段）不再要求 fromConfig 客户端，
+        // 走默认凭证优雅失败（此前 isEmpty() 判据会抛 configuration）
+        WopClient client = legacyClient();
+        for (WopRequestOptions options : new WopRequestOptions[]{
+                WopRequestOptions.builder().serverRoot("https://gw.example.com/gateway").build(),
+                WopRequestOptions.builder().expiredSeconds(600).build(),
+                WopRequestOptions.builder().connectTimeout(2500).build(),
+                WopRequestOptions.builder().readTimeout(2500).build()}) {
+            VerifyResult result = client.verifyResponse(
+                    Collections.emptyMap(), Codec.utf8("x"), "/p", options);
+            assertFalse(result.ok());
+            assertEquals(VerifyResult.Reason.MISSING_SIGN_HEADER, result.reason());
+        }
+    }
+
+    @Test
+    void verifyResponseIgnoresUnsignedSubMchIdHeader() {
+        // 附录 J/J3：入向不消费子商户身份头——响应额外携带未入签的该头，验签仍通过
+        byte[] plain = Codec.utf8("{\"ok\":true}");
+        WopClientVerifyTest.PlatformResponse resp = RIG.respond("/gateway/x", plain, false);
+        Map<String, String> headers = new LinkedHashMap<>(resp.headers());
+        headers.put("x-wop-sub-mch-id", "PLF-SUB-001");
+        WopClient client = WopClient.fromConfig(config(
+                d -> new TransportResponse(200, Collections.emptyMap(), new byte[0])));
+        VerifyResult result = client.verifyResponse(headers, plain, "/gateway/x");
+        assertTrue(result.ok(), () -> result.toString());
     }
 
     @Test

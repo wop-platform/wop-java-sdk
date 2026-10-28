@@ -27,6 +27,7 @@
 | A3 | L2 请求（F5 数字信封） | buildRequest(POST, path, body, L2) → encrypt 头+密文信封+digest 对密文 | JUnit + Gherkin | WopClientBuildRequestTest / 场景 3 |
 | A4 | 方法大小写/空入参拒绝 | "post"→POST；空 method/path/level 抛配置错误 | JUnit + Gherkin | 同上 / 场景 5-6 |
 | A5 | L2 无 body 拒绝 | buildRequest(L2, null body) 抛异常 | JUnit + Gherkin | CoverageEdge3Test / 场景 6 |
+| A6 | ISV 子商户身份头入签（D-13） | options.subMchId(...) → x-wop-sub-mch-id 写入且入 signedHeaders；不传时头缺席（AC-20） | JUnit | WopClientBuildRequestTest / WopSpecConformanceTest / WopClientExecuteTest |
 | B1 | L0 响应验签成功 | verifyResponse → ok=true，明文=原始 body | JUnit + Gherkin | WopClientVerifyTest / 场景 7 |
 | B2 | L2 响应验签+解密（F6 顺序） | verifyResponse → 明文还原 | JUnit + Gherkin | 同上 / 场景 8 |
 | B3 | 签名篡改 → 模糊拒绝（I7） | 篡改签名 → SIGNATURE_FAILED 且 detail=null | JUnit + Gherkin | 同上 / 场景 9 |
@@ -52,7 +53,7 @@
 | 分支覆盖率 | **100.00%** | JaCoCo（core；okhttp/jdkhttp 100%） |
 | Gherkin 场景 | **19/19 通过** | Cucumber-junit-platform（15 feature 场景 + 步骤） |
 | 变异测试 | 见 `docs/mutation-report.md` | PIT 环境阻塞 → 手工变异脚本（scripts/mutation-check.py） |
-| 单元测试 | 176 全过 | JUnit 5 |
+| 单元测试 | 535 全过（Windows 本地排除 2 个 POSIX 文件权限用例；全量 537） | JUnit 5 |
 
 ## 4. 测试覆盖到的"使用问题"边界（防回归锚点）
 

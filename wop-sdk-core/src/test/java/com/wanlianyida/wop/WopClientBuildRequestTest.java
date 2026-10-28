@@ -24,6 +24,7 @@ import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -121,6 +122,8 @@ class WopClientBuildRequestTest {
         assertEquals(java.util.Arrays.asList("x-wop-appkey", "x-wop-nonce", "x-wop-timestamp"), sign.signedHeaders());
         assertEquals("1_758_900_000_000".replace("_", ""), draft.headers().get("x-wop-timestamp"));
         assertEquals(NONCE.get(), draft.headers().get("x-wop-nonce"));
+        // AC-20 零回归：未传 subMchId 时该头缺席
+        assertNull(draft.headers().get("x-wop-sub-mch-id"));
     }
 
     @Test
@@ -140,6 +143,77 @@ class WopClientBuildRequestTest {
 
         // 签名可用商户公钥验证（网关侧行为）：重建 canonical
         assertTrue(signatureVerifies(draft, sign, RSA_PUB));
+    }
+
+    /** ISV D-13：子商户身份头存在即必须入签（网关 SignFilter 同形规则）。 */
+    @Test
+    void subMchIdHeaderSignedL0WithBody() {
+        WopClient client = fixedClient(NONCE);
+        byte[] body = Codec.utf8("{\"k\":1}");
+        RequestDraft draft = client.buildRequest("POST", "/gateway/order/create", body, SecurityLevel.L0,
+                WopRequestOptions.builder().subMchId("PLF-SUB-001").build());
+
+        assertEquals("PLF-SUB-001", draft.headers().get("x-wop-sub-mch-id"));
+        SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
+        // TreeSet 字典序：digest 与子商户头均入签
+        assertEquals(java.util.Arrays.asList("x-wop-appkey", "x-wop-content-digest",
+                "x-wop-nonce", "x-wop-sub-mch-id", "x-wop-timestamp"), sign.signedHeaders());
+        assertTrue(signatureVerifies(draft, sign, RSA_PUB));
+    }
+
+    @Test
+    void subMchIdHeaderSignedL0WithoutBody() {
+        WopClient client = fixedClient(NONCE);
+        RequestDraft draft = client.buildRequest("GET", "/gateway/order/get", null, SecurityLevel.L0,
+                WopRequestOptions.builder().subMchId("PLF-SUB-001").build());
+
+        SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
+        // 无 body → 无 digest；子商户头仍入签
+        assertEquals(java.util.Arrays.asList("x-wop-appkey", "x-wop-nonce",
+                "x-wop-sub-mch-id", "x-wop-timestamp"), sign.signedHeaders());
+        assertTrue(signatureVerifies(draft, sign, RSA_PUB));
+    }
+
+    @Test
+    void subMchIdHeaderSignedL2() {
+        WopClient client = fixedClient(NONCE);
+        RequestDraft draft = client.buildRequest("POST", "/gateway/pay", Codec.utf8("{\"amount\":100}"),
+                SecurityLevel.L2, WopRequestOptions.builder().subMchId("PLF-SUB-001").build());
+
+        SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
+        assertEquals(java.util.Arrays.asList("x-wop-appkey", "x-wop-content-digest", "x-wop-encrypt",
+                "x-wop-nonce", "x-wop-sub-mch-id", "x-wop-timestamp"), sign.signedHeaders());
+        assertTrue(signatureVerifies(draft, sign, RSA_PUB));
+    }
+
+    @Test
+    void subMchIdSignedWhileRequestIdStaysUnsigned() {
+        WopClient client = fixedClient(NONCE, () -> "fixedreq000000000000000000000001");
+        RequestDraft draft = client.buildRequest("GET", "/gateway/order/get", null, SecurityLevel.L0,
+                WopRequestOptions.builder().subMchId("PLF-SUB-001").requestId("req-042").build());
+
+        SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
+        // 附录 J/J1 与附录 I/I1 语义相反：身份头入签、透传头不入签
+        assertTrue(sign.signedHeaders().contains("x-wop-sub-mch-id"));
+        assertFalse(sign.signedHeaders().contains("x-wop-request-id"));
+        assertEquals("req-042", draft.headers().get("x-wop-request-id"));
+        assertTrue(signatureVerifies(draft, sign, RSA_PUB));
+    }
+
+    @Test
+    void subMchIdTrimsAndBlankKeepsHeadersByteIdentical() {
+        WopClient client = fixedClient(NONCE, () -> "fixedreq000000000000000000000001");
+        byte[] body = Codec.utf8("{\"k\":1}");
+        RequestDraft plain = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0);
+        // 空白 → 视为未设置，头与签名逐字节同存量行为（AC-20）
+        RequestDraft blank = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0,
+                WopRequestOptions.builder().subMchId("   ").build());
+        assertEquals(plain.headers(), blank.headers());
+        assertNull(blank.headers().get("x-wop-sub-mch-id"));
+        // 首尾空白 trim 后上行（与网关 lookup 的 trim 一致）
+        RequestDraft trimmed = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0,
+                WopRequestOptions.builder().subMchId("  PLF-SUB-001  ").build());
+        assertEquals("PLF-SUB-001", trimmed.headers().get("x-wop-sub-mch-id"));
     }
 
     @Test
@@ -163,6 +237,8 @@ class WopClientBuildRequestTest {
         assertTrue(encryptHeader.startsWith("L2;dek="));
         SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
         assertTrue(sign.signedHeaders().contains("x-wop-encrypt"));
+        // AC-20 零回归：未传 subMchId 时该头缺席
+        assertNull(draft.headers().get("x-wop-sub-mch-id"));
 
         // 平台私钥解包 DEK → AES-256-GCM → 解密 wire 得原文（请求方向角色对调自证）
         com.wanlianyida.wop.crypto.EncryptHeader.Parsed parsed = EncryptHeader.parse(encryptHeader);

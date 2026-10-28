@@ -52,6 +52,12 @@ public final class WopClient {
     private static final String HEADER_ENCRYPT = "x-wop-encrypt";
 
     /**
+     * 子商户身份头（ISV 一期 D-13）：值 = 子商户 plf_co_id，存在即必须纳入 signedHeaders；
+     * 缺席 = 应用自身身份（AC-20 零回归）。
+     */
+    private static final String HEADER_SUB_MCH_ID = "x-wop-sub-mch-id";
+
+    /**
      * 商户请求标识透传头（wop-specs 附录 I；不入 signedHeaders 白名单——网关按冻结清单
      * 重算 canonical 验签，多一头直接导致签名不匹配）。恒存在：商户传值或缺省 UUID 自生成。
      */
@@ -182,11 +188,12 @@ public final class WopClient {
         }
         ConfigUrlUtils.validateApiPath(path);
         String resolvedReqId = (options != null) ? options.resolvedRequestId() : null;
+        String resolvedSubMchId = (options != null) ? options.resolvedSubMchId() : null;
         boolean hasOverrides = (options != null) && options.hasConfigOverrides();
         // transport 非空 ⟹ 经 fromConfig 构造 ⟹ sdkConfig 非空，无重复防御分支（100% 覆盖门禁）
         WopRequestContext ctx = hasOverrides ? resolveContext(options) : defaultRequestContext;
         RequestDraft draft = buildRequestInternal(method, path, body, level,
-                hasOverrides ? ctx.outbound() : null, resolvedReqId);
+                hasOverrides ? ctx.outbound() : null, resolvedReqId, resolvedSubMchId);
         Transport sending = new FailoverTransport(transport, ctx);
         TransportResponse response = sending.send(draft, ctx.toTransportCall());
         return finishExecute(response, draft, ctx.inbound());
@@ -221,19 +228,20 @@ public final class WopClient {
     public RequestDraft buildRequest(String method, String path, byte[] body, SecurityLevel level,
                                      WopRequestOptions options) {
         if (options == null || options.isEmpty()) {
-            return buildRequestInternal(method, path, body, level, null, null);
+            return buildRequestInternal(method, path, body, level, null, null, null);
         }
-        // 仅 requestId 透传时不需要 sdkConfig（无配置覆盖）
+        // 仅 requestId/subMchId 透传时不需要 sdkConfig（无配置覆盖）
         if (options.hasConfigOverrides() && sdkConfig == null) {
             throw WopError.configuration("请求级覆盖需要经 fromConfig/defaultClient 构造的客户端");
         }
         return buildRequestInternal(method, path, body, level,
                 options.hasConfigOverrides() ? resolveContext(options).outbound() : null,
-                options.resolvedRequestId());
+                options.resolvedRequestId(), options.resolvedSubMchId());
     }
 
     private RequestDraft buildRequestInternal(String method, String path, byte[] body, SecurityLevel level,
-                                              WopRequestContext.Outbound outbound, String requestId) {
+                                              WopRequestContext.Outbound outbound, String requestId,
+                                              String subMchId) {
         if (method == null || method.trim().isEmpty()) {
             throw WopError.configuration("HTTP method 为空");
         }
@@ -261,6 +269,10 @@ public final class WopClient {
         headers.put(HEADER_APPKEY, effectiveAppKey);
         headers.put(HEADER_TIMESTAMP, Long.toString(clock.getAsLong()));
         headers.put(HEADER_NONCE, nonceGen.get());
+        // 子商户身份头在签名前写入：signedHeaders 取当前 headers key 的 TreeSet，自动入签（ISV D-13）
+        if (subMchId != null) {
+            headers.put(HEADER_SUB_MCH_ID, subMchId);
+        }
 
         if (level == SecurityLevel.L2) {
             byte[] dekKey = new byte[effectiveSuite.messageEncrypt().keyLength()];
@@ -290,7 +302,7 @@ public final class WopClient {
                 Codec.utf8(effectiveAppKey));
         headers.put(HEADER_SIGN, SignHeader.build(effectiveSuite.securityReq(), effectiveExpired,
                 signedHeaders, Codec.b64UrlEncode(signature)));
-        // requestId 在签名落盘后写入，保证不在 signedHeaders 白名单中（网关按冻结清单重算验签，附录 I/I1）；
+        // requestId 在签名落盘后写入，保证不入签（网关按请求声明的 signedHeaders 逐头重建 canonical 验签，附录 I/I1）；
         // 商户未传 → 缺省生成（附录 I/I3：UUID 去连字符），最终头恒存在
         String effectiveRequestId = requestId != null ? requestId : requestIdGen.get();
         headers.put(HEADER_REQUEST_ID, effectiveRequestId);
@@ -312,7 +324,7 @@ public final class WopClient {
      */
     public VerifyResult verifyResponse(Map<String, String> headers, byte[] body, String requestPath,
                                        WopRequestOptions options) {
-        if (options == null || options.isEmpty()) {
+        if (options == null || !options.hasInboundOverrides()) {
             return verifyInbound(headers, body, requestPath, null);
         }
         if (sdkConfig == null) {
@@ -343,7 +355,7 @@ public final class WopClient {
      */
     public VerifyResult verifyCallback(Map<String, String> headers, byte[] body, String callbackPath,
                                        WopRequestOptions options) {
-        if (options == null || options.isEmpty()) {
+        if (options == null || !options.hasInboundOverrides()) {
             return verifyInbound(headers, body, callbackPath, null);
         }
         if (sdkConfig == null) {

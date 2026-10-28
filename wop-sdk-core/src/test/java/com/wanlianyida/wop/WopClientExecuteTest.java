@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -172,5 +173,53 @@ class WopClientExecuteTest {
         // 未传 → 缺省生成 UUID（去连字符，小写 32 hex，附录 I/I3）
         client.execute("POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0);
         assertTrue(seen.get().headers().get("x-wop-request-id").matches("[0-9a-f]{32}"));
+    }
+
+    @Test
+    void executeCarriesSubMchIdHeaderSigned() {
+        // ISV D-13：execute 路径同样把子商户身份头写入并入签；仅 subMchId 不需要 sdkConfig 覆盖
+        AtomicReference<RequestDraft> seen = new AtomicReference<>();
+        Transport transport = new Transport() {
+            @Override
+            public boolean supportsTransportCall() {
+                return true;
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft draft) {
+                return send(draft, TransportCall.empty());
+            }
+
+            @Override
+            public TransportResponse send(RequestDraft draft, TransportCall call) {
+                seen.set(draft);
+                return new TransportResponse(200, Collections.emptyMap(), new byte[0]);
+            }
+        };
+        WopClient client = WopClient.fromConfig(configWithTransport(transport));
+
+        VerifyResult result = client.execute("POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0,
+                WopRequestOptions.builder().subMchId("PLF-SUB-001").build());
+        assertFalse(result.ok()); // 空响应头 → 入向验签失败但不抛（F6/I7）
+        assertEquals("PLF-SUB-001", seen.get().headers().get("x-wop-sub-mch-id"));
+        SignHeader.Parsed sign = SignHeader.parse(seen.get().headers().get("x-wop-sign"));
+        assertTrue(sign.signedHeaders().contains("x-wop-sub-mch-id"));
+        assertTrue(WopClientBuildRequestTest.signatureVerifies(seen.get(), sign, RSA_PUB));
+    }
+
+    @Test
+    void verifyIgnoresSubMchIdOnlyOptionsWithoutSdkConfig() {
+        // 同一份 options 只带 subMchId 时，入向验签不应要求 fromConfig（凭证走默认）
+        WopClient builderClient = WopClient.builder()
+                .appKey("app_001")
+                .suite("WOP-RSA3072-SHA256")
+                .merchantPrivateKey(RSA_PRIV)
+                .platformPublicKey(RSA_PUB)
+                .build();
+        WopRequestOptions options = WopRequestOptions.builder().subMchId("PLF-SUB-001").build();
+        assertFalse(builderClient.verifyResponse(
+                Collections.emptyMap(), new byte[0], "/gateway/x", options).ok());
+        assertFalse(builderClient.verifyCallback(
+                Collections.emptyMap(), new byte[0], "/cb", options).ok());
     }
 }

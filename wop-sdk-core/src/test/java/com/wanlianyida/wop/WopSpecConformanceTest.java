@@ -67,6 +67,17 @@ class WopSpecConformanceTest {
         assertTrue(sign.signedHeaders().contains("x-wop-content-digest"), sign.signedHeaders().toString());
     }
 
+    /** ISV D-13 肯定：携带 x-wop-sub-mch-id 时必须入签（网关 OP_GW_1017 反向约束）。 */
+    @Test
+    void subMchIdHeaderMustBeSignedWhenCarried() {
+        RequestDraft draft = fixedClient("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB)
+                .buildRequest("POST", "/gateway/waybill-sync", Codec.utf8("{}"), SecurityLevel.L0,
+                        WopRequestOptions.builder().subMchId("PLF-SUB-001").build());
+        SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
+        assertTrue(sign.signedHeaders().contains("x-wop-sub-mch-id"), sign.signedHeaders().toString());
+        assertTrue(WopClientBuildRequestTest.signatureVerifies(draft, sign, RSA_PUB));
+    }
+
     // ==================== §2.1 必传 header（否定式） ====================
 
     /** §2.1 否定：L0 请求不得携带 x-wop-encrypt 头（该头为 L2 专属）。 */

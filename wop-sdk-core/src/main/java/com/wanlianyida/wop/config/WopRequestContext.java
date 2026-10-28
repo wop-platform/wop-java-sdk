@@ -111,6 +111,7 @@ public final class WopRequestContext {
         return resolve(global, stripTransportFields(options));
     }
 
+    /** 出向字段（requestId/subMchId）在此被刻意丢弃：入向验签不得消费子商户身份头（sdk-spec 附录 J/J3）。 */
     private static WopRequestOptions stripTransportFields(WopRequestOptions options) {
         if (options == null || options.isEmpty()) {
             return WopRequestOptions.none();

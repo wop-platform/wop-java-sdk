@@ -11,7 +11,7 @@ wire byte formats.
 
 - Protocol sources: [crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md) (v0.4-draft) + [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/docs/specs/wop-sdk-spec.md) (v1.0-ratified)
 - Vector source of truth: [crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json) (fetched at build time from the pinned commit SHA with sha256 verification; no copy kept in this repo)
-- JDK 8+, Maven multi-module (`groupId: com.wanlianyida`, version 0.2.0; the unirest adapter requires Java 11+ at runtime — JDK 8 users should use the okhttp/jdkhttp adapters)
+- JDK 8+, Maven multi-module (`groupId: com.wanlianyida`, version 0.3.0; the unirest adapter requires Java 11+ at runtime — JDK 8 users should use the okhttp/jdkhttp adapters)
 - Single runtime dependency: BouncyCastle (the only supported path for SM2/SM3/SM4)
 
 | Module | Description |
@@ -31,26 +31,26 @@ Supported suites: `WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-core</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 
 <!-- Optional adapter (pick one): okhttp / unirest client dependencies are provided (bring your own; for unirest that is com.konghq:unirest-java-core) / jdkhttp has zero extra dependencies. The unirest adapter creates its own UnirestInstance by default — for long-running services, inject a shared instance via the constructor and close it on shutdown. Adapters register via META-INF/services and can be resolved through core's TransportFactory.discover() (ServiceLoader) — it requires exactly one adapter on the classpath; zero or multiple fail fast with a configuration error -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 <!-- or -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-jdkhttp</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 <!-- or -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-unirest</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
@@ -80,6 +80,25 @@ if (result.ok()) {
     System.out.println(result.message());   // signature/decrypt failures are vague (I7)
 }
 ```
+
+Per-request overrides: pass `WopRequestOptions.builder().appKey(...).serverRoot(...).build()` to
+`execute(..., options)` / `buildRequest(..., options)` / `verifyCallback(..., options)`.
+
+ISV sub-merchant identity (D-13): when calling business APIs on behalf of a sub-merchant, pass
+`subMchId` per request (value = the sub-merchant's `plf_co_id`):
+
+```java
+RequestDraft draft = client.buildRequest("POST", "/gateway/order/create", body, SecurityLevel.L0,
+        WopRequestOptions.builder().subMchId("PLF-SUB-001").build());
+```
+
+The SDK writes `x-wop-sub-mch-id` and includes it in the `x-wop-sign` signedHeaders (only leading/
+trailing ASCII spaces are trimmed; printable ASCII only, no internal whitespace, ≤128 chars; control
+characters such as tab/newline are rejected at build time even at the edges). **Gateway prerequisite**:
+the gateway must run the ISV D-13 build with the gray gate open for the app; until then the header is
+ignored by the gateway and the request runs under the app's own identity — do not enable it early.
+Omitting it keeps the app's own identity: the header is absent and behavior is byte-identical to
+earlier versions.
 
 ## Key Preparation (D12 distribution contract)
 
