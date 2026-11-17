@@ -123,7 +123,7 @@ Conventional Commits，body 用中文说明动机与影响：
 
 1. 版本号同步到全部模块 pom：`mvn versions:set -DnewVersion=X.Y.Z` → `mvn versions:commit`，提交
 2. 打 tag 并推送：`git tag vX.Y.Z && git push origin vX.Y.Z`
-3. workflow 校验 tag 与 pom 版本一致后，先跑 `mvn -B -ntp verify`（与 CI 相同门禁），全绿后以 `mvn -P release deploy` 上传 Central Portal；autoPublish=false 时构件停在待发布状态，**人工核对后到 Portal 手动 Publish**（首次发版策略，详见 [docs/release-guide.md](docs/release-guide.md)）；失败即中止，不留半发布状态
+3. workflow 校验 tag 与 pom 版本一致后，先跑 `mvn -B -ntp verify`（与 CI 相同门禁），全绿后以 `mvn -P release deploy` 上传 Central Portal；`autoPublish=true`（0.3.0 起），Portal 校验通过即自动发布，**发布不可撤销、坐标永久公开**——推 tag 前必须确认版本号（详见 [docs/release-guide.md](docs/release-guide.md)）；失败即中止，不留半发布状态
 
 发布通道为 Sonatype **Maven Central Portal**（OSSRH 已于 2025-06 停服后的官方路径）。
 

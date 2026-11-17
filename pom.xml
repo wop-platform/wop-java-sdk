@@ -218,8 +218,8 @@
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
-              <!-- 首次发版策略：false = 上传后停在 Portal 待发布，人工核对后手动 Publish -->
-              <autoPublish>false</autoPublish>
+              <!-- 链路上线策略：true = Portal 校验通过后自动发布（发布不可撤销，坐标永久公开） -->
+              <autoPublish>true</autoPublish>
             </configuration>
           </plugin>
         </plugins>

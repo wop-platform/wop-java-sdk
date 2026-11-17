@@ -216,7 +216,7 @@ ab986e6 test: 故障注入场景覆盖（协议层+双适配器网络层）；do
 | remote | origin = git@github.com:wop-platform/wop-java-sdk.git 已配置 |
 | 测试/覆盖率 | 208 tests 全绿；聚合行/分支 100.00% |
 
-**已按用户决策修正**：`autoPublish` true→false（首次发版人工核对后手动 Publish）；release.yml 注释验证路径改为 DNS TXT（原注释写的 GitHub 仓库验证不适用于 com.wanlianyida）。
+**已按用户决策修正**：`autoPublish` true→false（首次发版人工核对后手动 Publish）；release.yml 注释验证路径改为 DNS TXT（原注释写的 GitHub 仓库验证不适用于 com.wanlianyida）。（0.3.0 起改回 `true`，见 CONTRIBUTING §8）
 
 **发版前唯一阻断项**：Central Portal namespace `com.wanlianyida` 的 DNS TXT 验证（需 wanlianyida.com 域名控制权，操作指引见会话回复）。
 

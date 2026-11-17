@@ -98,8 +98,8 @@ jobs:
       - name: Build, test and enforce coverage gate（与 ci.yml 相同命令）
         run: mvn -B -ntp verify
 
-      - name: Publish to Maven Central（严格排在测试全绿之后；autoPublish=false：
-          上传后停在 Portal 待发布状态，人工核对构件/签名/坐标后手动 Publish）
+      - name: Publish to Maven Central（严格排在测试全绿之后；autoPublish=true：
+          Portal 校验通过即自动发布，发布不可撤销、坐标永久公开）
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: mvn -B -ntp -P release -DskipTests deploy
