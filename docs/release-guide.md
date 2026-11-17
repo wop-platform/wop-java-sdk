@@ -2,7 +2,7 @@
 
 > 版本：1.0（2026-08-29）｜ 适用：wop-java-sdk 0.1.0 首次发布
 > 决策记录：namespace = `com.wanlianyida`（**DNS TXT 验证**，依赖 wanlianyida.com 域名控制权）；
-> 首次发布策略 = **autoPublish=false**（上传后人工核对再手动 Publish）
+> 发布策略 = **autoPublish=true**（0.3.0 起：Portal 校验通过即自动发布，不可撤销）
 > 概览见 [CONTRIBUTING.md §8](../CONTRIBUTING.md)；自动化细节见 `.github/workflows/release.yml` 头部注释
 
 ## 0. 发版前检查结论（已完成，2026-08-29 实测）
@@ -12,7 +12,7 @@
 | 构建链 | ✅ | `mvn -P release -DskipTests package` 预验通过，三模块 sources/javadoc jar 共 6 个全部生成 |
 | 坐标 | ✅ | 父/子 pom 全部 `com.wanlianyida`，无 `com.wopplatform` 残留 |
 | Central 元数据 | ✅ | name/description/url/licenses/developers/scm 齐备（Central 校验必备） |
-| release profile | ✅ | maven-source 3.4.0 / javadoc 3.12.0（doclint=none）/ gpg 3.2.8（loopback）/ central-publishing 0.11.0（autoPublish=false） |
+| release profile | ✅ | maven-source 3.4.0 / javadoc 3.12.0（doclint=none）/ gpg 3.2.8（loopback）/ central-publishing 0.11.0（autoPublish=true） |
 | release.yml | ✅ | tag↔pom 版本一致性校验 → GPG 导入 → Secrets 注入 settings.xml → 测试全绿后 deploy |
 | 远端 | ✅ | origin = `git@github.com:wop-platform/wop-java-sdk.git` |
 | 测试/覆盖率 | ✅ | 208 tests 全绿；JaCoCo 聚合行 100.00% / 分支 100.00%（三模块门禁各 ≥98%） |
@@ -65,19 +65,17 @@ git tag v0.1.0 && git push origin v0.1.0
 release.yml 自动执行：版本一致性校验 → GPG 密钥导入 → `mvn verify`（门禁再跑一遍）→
 `mvn -P release -DskipTests deploy` 上传（source/javadoc/GPG 签名构件）。任一步失败即中止，不留半发布状态。
 
-### 2.1 人工核对与手动发布（首次发版策略）
+### 2.1 自动发布（autoPublish=true）
 
-上传成功后构件处于**待发布**状态（autoPublish=false）：
+上传后 Portal 自动校验并发布，无需人工点击。CI 日志出现以下两行即完成：
 
-1. Portal → **Publishing / Releases** 打开本次部署。
-2. 核对：
-   - 三模块坐标 `com.wanlianyida:wop-sdk-{core,okhttp,jdkhttp}:0.1.0`
-   - 每构件四件套：主 jar / sources / javadoc / `.asc` 签名
-   - POM 元数据（licenses MIT、developers、scm 指向 wop-platform/wop-java-sdk）
-3. 无误后点 **Publish**。
+```
+Uploaded bundle successfully, deployment name: Deployment, deploymentId: <uuid>
+Deployment <uuid> has been successfully published
+```
 
-> **不可撤回提醒**：Central 发布后坐标永久公开、不可删除。发布前发现的任何问题，
-> 直接在 Portal 丢弃（Discard）该部署，修完重新打 tag（删除 tag 重推即可，workflow 幂等）。
+> **不可撤回提醒**：Central 发布后坐标永久公开、不可删除。上传前发现的任何问题，
+> 直接丢弃（Discard）该部署，修完重新打 tag（删除 tag 重推即可，workflow 幂等）。
 
 ## 3. 阶段三：发版后验证
 
@@ -107,8 +105,8 @@ git commit -am "chore: bump version to 0.1.1-SNAPSHOT"
    该域名的持续控制权 = namespace 的持续控制权。域名到期不影响已发布构件，
    但将无法在该 namespace 下发布新版本。若域名非长期资产，唯一不依赖域名的
    替代是 `io.github.wop-platform`（需全仓坐标迁移）；**0.1.0 Publish 前是最后的低成本反悔窗口**。
-2. **autoPublish=false 仅首次**：链路验证稳定后可改回 `true`（pom `central-publishing` 配置），
-   减少一次人工环节；保留 false 亦可，作为每版的例行核对点。
+2. **autoPublish=true**（0.3.0 起）：Portal 校验通过即自动发布，无需人工环节；
+   如需每版人工核对，改回 `false`（pom `central-publishing` 配置）。
 3. **坐标决策一致性**：README 依赖示例、scm/developers（org=wop-platform）与 groupId（com.wanlianyida）
    为有意组合（组织在 GitHub，发布坐标用自有域名）；后续其他五语言 SDK 发布时保持同一 namespace 策略，
    避免六仓坐标体系分裂。
