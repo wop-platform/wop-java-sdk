@@ -22,13 +22,25 @@ mvn dependency:tree -Dincludes=org.bouncycastle
 
 ## 为什么不能"自动升级"
 
-Maven 版本排序中 `0.3.0-jdk15on.1 < 0.3.0`。Renovate / Dependabot /
-`mvn versions:display-dependency-updates` 会把 18on 线的 `0.3.0` 视为可用升级，
-接受后消费者的 classpath 上会同时出现两个 BC jar，重新触发本仓库要解决的冲突。
+Maven 的 `ComparableVersion` 会把未识别限定符排在发布版本**之后**，因此：
 
-**使用 15on 线时，必须锁定精确版本并限制更新工具。**
+```
+0.3.0-jdk15on.1  >  0.3.0
+```
 
-Renovate：
+这带来两个方向的跨线风险：
+
+- **18on 使用者**（当前 `0.3.0`）会被 Renovate / Dependabot / `mvn versions:display-dependency-updates`
+  提示升级到 `0.3.0-jdk15on.1`——这会把项目迁到 15on 线，并在 classpath 上同时引入
+  `bcprov-jdk18on` 与 `bcprov-jdk15on`；
+- **15on 使用者**（当前 `0.3.0-jdk15on.1`）暂时不会被拉回 `0.3.0`，但主干发布 `0.3.1+`
+  之后，同样会被提示跨线升级。
+
+单一坐标空间无法靠版本排序隔离两条发行线。**结构性方案是给 15on 线使用独立
+artifactId**（例如 `wop-sdk-core-jdk15on`）；在完成该改造之前，两条线都必须锁定
+精确版本并限制更新工具。
+
+Renovate（15on 项目限制在本发行线）：
 
 ```json
 {
@@ -46,7 +58,26 @@ Renovate：
 }
 ```
 
-Dependabot：
+Renovate（18on 项目排除 15on 发行线）：
+
+```json
+{
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "com.wanlianyida:wop-sdk-core",
+        "com.wanlianyida:wop-sdk-jdkhttp",
+        "com.wanlianyida:wop-sdk-okhttp",
+        "com.wanlianyida:wop-sdk-unirest"
+      ],
+      "allowedVersions": "/^\\d+\\.\\d+\\.\\d+$/"
+    }
+  ]
+}
+```
+
+Dependabot 的 `ignore` 只能列举具体版本，必须覆盖**全部四个构件**；15on 项目需忽略
+18on 线的版本，18on 项目需忽略 15on 线的版本，且两条线每次发版都要补充：
 
 ```yaml
 version: 2
@@ -56,17 +87,24 @@ updates:
     schedule:
       interval: "weekly"
     ignore:
-      # 18on 线的版本，按主干实际发布逐个补充
+      # 示例：15on 项目忽略 18on 线；反向场景把版本列表换成 15on 线
       - dependency-name: "com.wanlianyida:wop-sdk-core"
+        versions: ["0.3.0"]
+      - dependency-name: "com.wanlianyida:wop-sdk-jdkhttp"
+        versions: ["0.3.0"]
+      - dependency-name: "com.wanlianyida:wop-sdk-okhttp"
+        versions: ["0.3.0"]
+      - dependency-name: "com.wanlianyida:wop-sdk-unirest"
         versions: ["0.3.0"]
 ```
 
-不论使用哪种工具，都建议在 pom 中写死精确版本（不要用范围），并在升级 PR 中检查
+不论使用哪种工具，都必须在 pom 中写死精确版本（不要用范围），并在升级 PR 中检查
 `dependency:tree` 是否仍只有一个 `bcprov-*`。
 
 ## 维护者约定
 
 1. **版本格式**：`<基线版本>-jdk15on.<序号>`，序号从 1 递增；同一基线只发布一次，不可覆盖。
+   该方案是单坐标空间下的临时折中（排序无法隔离两条线）；长期应改为独立 artifactId。
 2. **发布**：`tag = v<完整版本>`，与根 pom 一致（`release.yml` 会校验）；发布前跑
    `mvn -B -ntp verify`，覆盖率与 japicmp 门禁必须全绿。
 3. **BC 升级**：15on 分支已冻结在 1.70（最后一版）。若确需变更，必须同步更新

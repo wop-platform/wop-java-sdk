@@ -32,7 +32,7 @@ Supported suites: `WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA
 >
 > Pick with `mvn dependency:tree -Dincludes=org.bouncycastle`: if you see `bcprov-jdk15on`, use this line; otherwise use `main`. The `jdk15on` branch is no longer security-maintained (1.70 is the final release); new projects should prefer the `jdk18on` line.
 >
-> Pin an exact version when using this line: `0.3.0-jdk15on.1` sorts below the 18on `0.3.0`, so Renovate/Dependabot will propose a cross-line upgrade that reintroduces both BC jars. See [docs/release-lines.md](docs/release-lines.md) for update constraints and maintenance rules, and [SECURITY.md](SECURITY.md) for the security boundary.
+> Both release lines share one coordinate space: Maven orders an unrecognized qualifier after the release version (`0.3.0-jdk15on.1 > 0.3.0`), so **users on either line can be pulled across by update tools**. Pin an exact version and configure Renovate/Dependabot as described in [docs/release-lines.md](docs/release-lines.md); see [SECURITY.md](SECURITY.md) for the security boundary.
 
 > **JDK adapter memory profile (`wop-sdk-jdkhttp`)**: request bodies are sent through `HttpURLConnection`'s default buffering mode — in streaming mode the JDK discards 401/407 challenge response bodies (`getErrorStream()` is always null), so buffering is the only correct option — meaning peak memory during a send is roughly 2x the request body size; response reading still streams under the 11MB cap. For very large request bodies prefer the okhttp/unirest adapters.
 

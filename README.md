@@ -32,7 +32,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 >
 > 选择规则：运行 `mvn dependency:tree -Dincludes=org.bouncycastle`，看到 `bcprov-jdk15on` 就用本发行线，否则用 `main` 发行线。`jdk15on` 分支已停止安全维护（1.70 为最后一版），新项目优先选择 `jdk18on` 线。
 >
-> 使用本发行线请**锁定精确版本**：`0.3.0-jdk15on.1` 在 Maven 排序中低于 18on 线的 `0.3.0`，Renovate/Dependabot 会提示跨线升级，接受后会重新引入两个 BC jar。完整的升级限制配置与维护约定见 [docs/release-lines.md](docs/release-lines.md)，安全边界见 [SECURITY.md](SECURITY.md)。
+> 两条发行线共用同一坐标空间：Maven 把未识别限定符排在发布版之后（`0.3.0-jdk15on.1 > 0.3.0`），**两条线的使用者都可能被更新工具诱导跨线**。请锁定精确版本并按 [docs/release-lines.md](docs/release-lines.md) 配置 Renovate/Dependabot；安全边界见 [SECURITY.md](SECURITY.md)。
 
 > **JDK 适配器内存画像（`wop-sdk-jdkhttp`）**：请求体经 `HttpURLConnection` 默认缓冲模式发送——streaming 模式遇 401/407 挑战会丢弃错误响应体（`getErrorStream()` 恒 null），缓冲是唯一正确解——发送期间峰值内存约为请求体字节数的 2 倍；响应侧仍为 11MB 流式读取。超大请求体场景建议改用 okhttp/unirest 适配器。
 

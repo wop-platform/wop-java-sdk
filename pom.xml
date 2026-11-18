@@ -6,6 +6,9 @@
 
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-java-sdk</artifactId>
+  <!-- 双发行线共用同一坐标空间：Maven 把未知限定符排在发布版之后，
+       0.3.0-jdk15on.1 > 0.3.0，两条线的使用者都可能被更新工具诱导跨线。
+       因此必须锁定精确版本；结构性隔离需改用独立 artifactId，见 docs/release-lines.md。 -->
   <version>0.3.0-jdk15on.1</version>
   <packaging>pom</packaging>
   <name>WOP Java SDK</name>
