@@ -1,5 +1,6 @@
 package com.wanlianyida.wop.crypto.strategies;
 
+import com.wanlianyida.wop.crypto.BouncyCastleHolder;
 import com.wanlianyida.wop.crypto.CryptoException;
 import org.bouncycastle.crypto.engines.SM2Engine;
 import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
@@ -34,9 +35,10 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
         return encrypt(plainKey, publicKey, RANDOM);
     }
 
-    /** 加密随机 k 取自注入源（确定性钩子）。 */
+    /** 加密随机 k 取自注入源（确定性钩子）；版本守卫在 try 之外。 */
     @Override
     public byte[] encrypt(byte[] plainKey, PublicKey publicKey, SecureRandom random) {
+        BouncyCastleHolder.provider();
         try {
             ECPublicKeyParameters params = Sm2Support.toPublicParams(publicKey);
             SM2Engine engine = new SM2Engine(SM2Engine.Mode.C1C3C2);
@@ -47,9 +49,10 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
         }
     }
 
-    /** 解包（C1C3C2 顺序；旧国标 C1C2C3 密文必然失败）。 */
+    /** 解包（C1C3C2 顺序；旧国标 C1C2C3 密文必然失败）；版本守卫在 try 之外。 */
     @Override
     public byte[] decrypt(byte[] cipherText, PrivateKey privateKey) {
+        BouncyCastleHolder.provider();
         try {
             ECPrivateKeyParameters params = Sm2Support.toPrivateParams(privateKey);
             SM2Engine engine = new SM2Engine(SM2Engine.Mode.C1C3C2);

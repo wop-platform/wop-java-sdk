@@ -6,7 +6,10 @@
 
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-java-sdk</artifactId>
-  <version>0.3.0</version>
+  <!-- 双发行线共用同一坐标空间：Maven 把未知限定符排在发布版之后，
+       0.3.0-jdk15on.1 > 0.3.0，两条线的使用者都可能被更新工具诱导跨线。
+       因此必须锁定精确版本；结构性隔离需改用独立 artifactId，见 docs/release-lines.md。 -->
+  <version>0.3.0-jdk15on.1</version>
   <packaging>pom</packaging>
   <name>WOP Java SDK</name>
   <description>WOP 商户侧官方 Java SDK：签名/摘要/L2 数字信封/验签解密协议核心 + HTTP 适配器</description>
@@ -24,7 +27,9 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <maven.compiler.release>8</maven.compiler.release>
-    <bc.version>1.85</bc.version>
+    <!-- jdk15on 发行线：bcprov-jdk15on 最后一版为 1.70（之后仅维护 jdk18on）。
+         本分支面向已有 bcprov-jdk15on 的老项目，避免与 jdk18on 同名类冲突。 -->
+    <bc.version>1.70</bc.version>
     <junit.version>5.12.2</junit.version>
     <okhttp.version>4.12.0</okhttp.version>
     <unirest.version>4.10.1</unirest.version>
@@ -42,7 +47,7 @@
       </dependency>
       <dependency>
         <groupId>org.bouncycastle</groupId>
-        <artifactId>bcprov-jdk18on</artifactId>
+        <artifactId>bcprov-jdk15on</artifactId>
         <version>${bc.version}</version>
       </dependency>
       <dependency>

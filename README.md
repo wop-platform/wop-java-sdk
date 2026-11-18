@@ -11,8 +11,8 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 
 - 协议真源：[crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md)（v0.4-draft）+ [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/docs/specs/wop-sdk-spec.md)（v1.0-ratified）
 - 向量真源：[crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json)（构建期按 commit SHA 钉版拉取 + sha256 校验，本仓不保留副本）
-- JDK 8+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.3.0；unirest 适配器运行时要求 Java 11+，JDK 8 用户请用 okhttp/jdkhttp 适配器）
-- 运行时依赖仅 BouncyCastle（国密 SM2/SM3/SM4 唯一路径）
+- JDK 8+，Maven 多模块（`groupId: com.wanlianyida`，版本 0.3.0-jdk15on.1；unirest 适配器运行时要求 Java 11+，JDK 8 用户请用 okhttp/jdkhttp 适配器）
+- 运行时依赖仅 BouncyCastle（国密 SM2/SM3/SM4 唯一路径）；本发行线使用 `bcprov-jdk15on`
 
 | 模块 | 说明 |
 |------|------|
@@ -22,6 +22,17 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 | `wop-sdk-unirest` | Kong Unirest 4.x 适配器（unirest-java-core 依赖 `provided`，商户自带版本；运行时要求 Java 11+，上游 4.x 字节码 major 55） |
 
 支持套件：`WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`。
+
+> **发行线选择（重要）**：SDK 提供两条 BouncyCastle 依赖线，二者**不可同时出现在同一 classpath**（`jdk15on` 与 `jdk18on` 是不同 artifact、同名包）。
+>
+> | 发行线 | 坐标版本 | 适用项目 |
+> |---|---|---|
+> | `jdk15on`（本分支） | `0.3.0-jdk15on.1` | 已有 `bcprov-jdk15on`（≥1.65）的老项目，无需排除任何依赖 |
+> | `jdk18on`（main） | `0.3.0` | 无 BC 依赖、或已使用 `bcprov-jdk18on` 的项目 |
+>
+> 选择规则：运行 `mvn dependency:tree -Dincludes=org.bouncycastle`，看到 `bcprov-jdk15on` 就用本发行线，否则用 `main` 发行线。`jdk15on` 分支已停止安全维护（1.70 为最后一版），新项目优先选择 `jdk18on` 线。
+>
+> 两条发行线共用同一坐标空间：Maven 把未识别限定符排在发布版之后（`0.3.0-jdk15on.1 > 0.3.0`），**两条线的使用者都可能被更新工具诱导跨线**。请锁定精确版本并按 [docs/release-lines.md](docs/release-lines.md) 配置 Renovate/Dependabot；安全边界见 [SECURITY.md](SECURITY.md)。
 
 > **JDK 适配器内存画像（`wop-sdk-jdkhttp`）**：请求体经 `HttpURLConnection` 默认缓冲模式发送——streaming 模式遇 401/407 挑战会丢弃错误响应体（`getErrorStream()` 恒 null），缓冲是唯一正确解——发送期间峰值内存约为请求体字节数的 2 倍；响应侧仍为 11MB 流式读取。超大请求体场景建议改用 okhttp/unirest 适配器。
 
@@ -34,7 +45,7 @@ WOP 网关商户侧官方 Java 客户端：封装协议核心（签名 / 摘要 
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-jdkhttp</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 ```
 
@@ -94,26 +105,26 @@ trim；可打印 ASCII、无内部空白、≤128 字符，控制字符含 tab/�
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-core</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 
 <!-- 可选适配器（三选一）：okhttp / unirest 的客户端依赖 scope=provided（商户自带版本，unirest 即 com.konghq:unirest-java-core） / jdkhttp 零额外依赖。unirest 适配器默认自建 UnirestInstance，长期运行建议经构造器注入复用单例并统一关闭。适配器经 META-INF/services 注册，可由 core 的 TransportFactory.discover()（ServiceLoader）解析——要求 classpath 恰一适配器，零/多均以配置错误 fail-fast -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 <!-- 或 -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-jdkhttp</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 <!-- 或 -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-unirest</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 ```
 

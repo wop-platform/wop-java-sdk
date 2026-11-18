@@ -4,6 +4,7 @@ import com.wanlianyida.wop.crypto.BouncyCastleHolder;
 import com.wanlianyida.wop.crypto.CryptoException;
 
 import java.security.MessageDigest;
+import java.security.Provider;
 
 /**
  * 国密摘要策略：SM3（BC 承接）。
@@ -18,11 +19,12 @@ public final class Sm3DigestStrategy implements DigestStrategy {
     private Sm3DigestStrategy() {
     }
 
-    /** 计算 SM3 摘要（BC 承接）。 */
+    /** 计算 SM3 摘要（BC 承接）；版本守卫在 try 之外，保证配置错误不被包装为加密失败。 */
     @Override
     public byte[] digest(byte[] data) {
+        Provider provider = BouncyCastleHolder.provider();
         try {
-            return MessageDigest.getInstance(ALGORITHM, BouncyCastleHolder.provider()).digest(data);
+            return MessageDigest.getInstance(ALGORITHM, provider).digest(data);
         } catch (Exception e) {
             throw new CryptoException("DIGEST", ALGORITHM, "SM3 摘要失败", e);
         }
