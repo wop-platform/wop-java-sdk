@@ -11,8 +11,8 @@ wire byte formats.
 
 - Protocol sources: [crypto-strategy-spec.md](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-strategy-spec.md) (v0.4-draft) + [wop-sdk-spec.md](https://github.com/wop-platform/wop-specs/blob/main/docs/specs/wop-sdk-spec.md) (v1.0-ratified)
 - Vector source of truth: [crypto-vectors.json](https://github.com/wop-platform/wop-specs/blob/main/crypto/crypto-vectors.json) (fetched at build time from the pinned commit SHA with sha256 verification; no copy kept in this repo)
-- JDK 8+, Maven multi-module (`groupId: com.wanlianyida`, version 0.3.0; the unirest adapter requires Java 11+ at runtime — JDK 8 users should use the okhttp/jdkhttp adapters)
-- Single runtime dependency: BouncyCastle (the only supported path for SM2/SM3/SM4)
+- JDK 8+, Maven multi-module (`groupId: com.wanlianyida`, version 0.3.0-jdk15on.1; the unirest adapter requires Java 11+ at runtime — JDK 8 users should use the okhttp/jdkhttp adapters)
+- Single runtime dependency: BouncyCastle (the only supported path for SM2/SM3/SM4); this release line uses `bcprov-jdk15on`
 
 | Module | Description |
 |--------|-------------|
@@ -23,6 +23,15 @@ wire byte formats.
 
 Supported suites: `WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA256` / `WOP-SM2-SM3`.
 
+> **Release line selection (important)**: the SDK ships two BouncyCastle lines, and they **must not coexist on one classpath** (`jdk15on` and `jdk18on` are distinct artifacts sharing the same packages).
+>
+> | Release line | Coordinates | Intended for |
+> |---|---|---|
+> | `jdk15on` (this branch) | `0.3.0-jdk15on.1` | Projects already using `bcprov-jdk15on` (≥1.65); no exclusions needed |
+> | `jdk18on` (main) | `0.3.0` | Projects without BC, or already on `bcprov-jdk18on` |
+>
+> Pick with `mvn dependency:tree -Dincludes=org.bouncycastle`: if you see `bcprov-jdk15on`, use this line; otherwise use `main`. The `jdk15on` branch is no longer security-maintained (1.70 is the final release); new projects should prefer the `jdk18on` line.
+
 > **JDK adapter memory profile (`wop-sdk-jdkhttp`)**: request bodies are sent through `HttpURLConnection`'s default buffering mode — in streaming mode the JDK discards 401/407 challenge response bodies (`getErrorStream()` is always null), so buffering is the only correct option — meaning peak memory during a send is roughly 2x the request body size; response reading still streams under the 11MB cap. For very large request bodies prefer the okhttp/unirest adapters.
 
 ## Quick Start
@@ -31,26 +40,26 @@ Supported suites: `WOP-RSA2048-SHA256` / `WOP-RSA3072-SHA256` / `WOP-RSA4096-SHA
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-core</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 
 <!-- Optional adapter (pick one): okhttp / unirest client dependencies are provided (bring your own; for unirest that is com.konghq:unirest-java-core) / jdkhttp has zero extra dependencies. The unirest adapter creates its own UnirestInstance by default — for long-running services, inject a shared instance via the constructor and close it on shutdown. Adapters register via META-INF/services and can be resolved through core's TransportFactory.discover() (ServiceLoader) — it requires exactly one adapter on the classpath; zero or multiple fail fast with a configuration error -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-okhttp</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 <!-- or -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-jdkhttp</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 <!-- or -->
 <dependency>
   <groupId>com.wanlianyida</groupId>
   <artifactId>wop-sdk-unirest</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.0-jdk15on.1</version>
 </dependency>
 ```
 
