@@ -9,6 +9,9 @@ target/
 dependency-reduced-pom.xml
 .flattened-pom.xml
 
+# 本地代码审查报告（不随仓库分发）
+.zcode-review/
+
 # python
 __pycache__
 .pytest_cache
