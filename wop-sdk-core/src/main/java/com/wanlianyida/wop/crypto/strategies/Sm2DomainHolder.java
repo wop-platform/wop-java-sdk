@@ -1,6 +1,5 @@
 package com.wanlianyida.wop.crypto.strategies;
 
-/** sm2p256v1 域参数与指纹常量（进程级，包内共享）。 */
 final class Sm2DomainHolder {
 
     static final org.bouncycastle.asn1.x9.X9ECParameters X9 =
@@ -15,7 +14,6 @@ final class Sm2DomainHolder {
     static final java.math.BigInteger N = X9.getN();
     static final String FINGERPRINT = fingerprintOf();
 
-    /** 常量容器禁实例化。 */
     private Sm2DomainHolder() {
     }
 

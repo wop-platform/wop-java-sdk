@@ -12,10 +12,6 @@ import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * 覆盖率 100% 闭合测试（spec v1.0 使用场景边界）：
- * 覆盖 DekPayload.encode 字段缺失全分支、Codec 字符类边界、buildRequest 空数组 body 路径。
- */
 class CoverageEdge3Test {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -29,7 +25,6 @@ class CoverageEdge3Test {
                 RSA_PRIV, RSA_PUB, 1800), clock, nonce);
     }
 
-    // ==================== Codec 边界（isB64UrlChar 字符类全覆盖） ====================
 
     @Test
     void codecNullInputs() {
@@ -41,18 +36,14 @@ class CoverageEdge3Test {
 
     @Test
     void codecB64UrlCharClassBoundaries() {
-        // 4 个字符类边界：A/Z、a/z、0/9、-/_ 全量合法（8 字符 → 6 字节）
         assertEquals(6, Codec.b64UrlDecode("AZaz09-_").length);
-        // 编码往返：字节级一致
         byte[] data = "边界测试!".getBytes(StandardCharsets.UTF_8);
         assertArrayEquals(data, Codec.b64UrlDecode(Codec.b64UrlEncode(data)));
-        // 越界字符：大写后 '@' 与 '['、小写后 '`' 与 '{'、数字前后 '/' 与 ':'、符号 '=' '+'
         for (char bad : new char[]{'@', '[', '`', '{', '/', ':', '=', '+', ' ', '%'}) {
             assertThrows(IllegalArgumentException.class,
                     () -> Codec.b64UrlDecode("abc" + bad),
                     "非法字符 " + bad + " 应拒绝");
         }
-        // 长度 mod 4 == 1 拒绝
         assertThrows(IllegalArgumentException.class, () -> Codec.b64UrlDecode("abcde"));
     }
 
@@ -62,7 +53,6 @@ class CoverageEdge3Test {
         assertArrayEquals(new byte[]{1, 2}, Codec.concat(new byte[]{1}, new byte[]{2}));
     }
 
-    // ==================== DekPayload.encode/decode 全分支 ====================
 
     private static DekPayload validPayload() {
         return new DekPayload("AES256-GCM",
@@ -81,17 +71,14 @@ class CoverageEdge3Test {
     void dekPayloadEncodeMissingFields() {
         byte[] k = validPayload().key();
         byte[] iv = validPayload().iv();
-        // alg null / blank
         assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload(null, k, iv)));
         assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("   ", k, iv)));
-        // key null / empty
         assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES256-GCM", null, iv)));
         assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES256-GCM", new byte[0], iv)));
-        // iv null / empty
         assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES256-GCM", k, null)));
         assertThrows(WopError.class,
@@ -113,27 +100,21 @@ class CoverageEdge3Test {
 
     @Test
     void dekPayloadDecodeMalformed() {
-        // null / 空
         assertThrows(WopError.class, () -> DekPayload.decode(null));
         assertThrows(WopError.class, () -> DekPayload.decode(""));
-        // 段数错误（2 段 / 4 段）
         assertThrows(WopError.class, () -> DekPayload.decode("a$b"));
         assertThrows(WopError.class, () -> DekPayload.decode("a$b$c$d"));
-        // alg 段空白
         assertThrows(WopError.class, () -> DekPayload.decode("$AAAA$BBBB"));
-        // key/iv 段非法 base64url（catch 分支）
         assertThrows(WopError.class,
                 () -> DekPayload.decode("AES256-GCM$!!!$AAAA"));
         assertThrows(WopError.class,
                 () -> DekPayload.decode("AES256-GCM$AAAA$==="));
     }
 
-    // ==================== WopClient.buildRequest 空数组 body 路径 ====================
 
     @Test
     void buildRequestEmptyByteArrayBodyIsNoBody() {
         WopClient client = testClient();
-        // L0 + 空数组：hasBody=false → wireBody=null → digest 缺席（与 null body 同语义）
         RequestDraft draft = client.buildRequest("POST", "/gateway/test", new byte[0], SecurityLevel.L0);
         assertNull(draft.wireBody());
         assertNull(draft.headers().get("x-wop-content-digest"));

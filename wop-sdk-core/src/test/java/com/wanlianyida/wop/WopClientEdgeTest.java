@@ -15,10 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * WopClient 边界：legacy（无 serverRoot）与 fromConfig 客户端的行为分界、
- * verifyResponse/verifyCallback 的 options 分支、Builder 守卫与变体。
- */
 class WopClientEdgeTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -28,7 +24,6 @@ class WopClientEdgeTest {
     private static final WopClientVerifyTest.PlatformRig RIG =
             new WopClientVerifyTest.PlatformRig("WOP-RSA3072-SHA256", RSA_PRIV, RSA_PUB);
 
-    /** 记录 send 入参并回放固定响应的传输。 */
     private static final class RecordingTransport implements Transport {
         final TransportResponse response;
         TransportCall seenCall;
@@ -166,7 +161,6 @@ class WopClientEdgeTest {
 
     @Test
     void verifyResponseIgnoresUnsignedSubMchIdHeader() {
-        // 附录 J/J3：入向不消费子商户身份头——响应额外携带未入签的该头，验签仍通过
         byte[] plain = Codec.utf8("{\"ok\":true}");
         WopClientVerifyTest.PlatformResponse resp = RIG.respond("/gateway/x", plain, false);
         Map<String, String> headers = new LinkedHashMap<>(resp.headers());
@@ -288,7 +282,6 @@ class WopClientEdgeTest {
                 .build();
         assertTrue(httpNull.execute("POST", "/gateway/x", plain, SecurityLevel.L0).ok());
 
-        // serverRoot 仅有空白 → legacy 客户端，execute 拒绝
         WopClient blankRoot = WopClient.builder()
                 .appKey("app_001").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB)
@@ -322,7 +315,6 @@ class WopClientEdgeTest {
 
     @Test
     void executeInterceptsInformationalStatus() {
-        // 1xx（< 200）同样不属于成功区间 → WopGatewayResponseException
         RecordingTransport stub = new RecordingTransport(
                 new TransportResponse(199, Collections.emptyMap(), new byte[0]));
         WopClient client = WopClient.fromConfig(config(stub));

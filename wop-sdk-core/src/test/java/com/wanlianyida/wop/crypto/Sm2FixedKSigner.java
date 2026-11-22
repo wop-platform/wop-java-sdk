@@ -11,10 +11,6 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Arrays;
 
-/**
- * SM2 固定 k 参考签名器（<b>测试专用</b>）：按 GM/T 0009 手写签名数学，
- * 与黄金向量字节级互证；生产路径（BC SM2Signer + CSPRNG k）经 verify 侧钉死。
- */
 public final class Sm2FixedKSigner {
 
     private static final X9ECParameters P = GMNamedCurves.getByName("sm2p256v1");
@@ -23,7 +19,6 @@ public final class Sm2FixedKSigner {
     private Sm2FixedKSigner() {
     }
 
-    /** 以显式 k 签名，返回裸 r||s 64B。 */
     public static byte[] sign(byte[] message, PrivateKey privateKey, BigInteger k) {
         BigInteger d = Sm2TestKeys.dOf(privateKey);
         ECPoint q = P.getG().multiply(d).normalize();
@@ -52,7 +47,6 @@ public final class Sm2FixedKSigner {
         return concat(fix32(r), fix32(s));
     }
 
-    /** 从公钥取 Q 点（跨实现互证辅助）。 */
     public static byte[] publicPoint(PublicKey publicKey) {
         ECPoint q = com.wanlianyida.wop.crypto.strategies.Sm2Support.toPublicParams(publicKey).getQ();
         return q.getEncoded(false);

@@ -14,15 +14,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * 配置加载入口（§4）：线程安全缓存；Java 优先级 1 为 JVM 系统属性 {@link #CONFIG_FILE_PROPERTY}。
- */
 public final class WopSdkConfigLoader {
 
-    /** JVM 系统属性：显式配置文件路径（§4.2 优先级 1，附录 A.3）。 */
     public static final String CONFIG_FILE_PROPERTY = "wop.sdk.config.file";
 
-    /** 环境变量：配置文件路径（§4.2 优先级 2）。 */
     public static final String CONFIG_FILE_ENV = "WOP_SDK_CONFIG";
 
     private static final String CLASSPATH_PREFIX = "classpath:";
@@ -34,7 +29,6 @@ public final class WopSdkConfigLoader {
     private WopSdkConfigLoader() {
     }
 
-    /** 按 §4.2 自动发现并加载；同一位置缓存解析结果。 */
     public static WopSdkConfig loadDefault() {
         List<DiscoveryCandidate> candidates = defaultDiscoveryCandidates();
         for (DiscoveryCandidate candidate : candidates) {
@@ -75,7 +69,6 @@ public final class WopSdkConfigLoader {
         return load(Paths.get(trimmed));
     }
 
-    /** 显式文件系统路径加载。 */
     public static WopSdkConfig load(Path path) {
         Objects.requireNonNull(path, "path");
         Path normalized = path.toAbsolutePath().normalize();
@@ -114,7 +107,6 @@ public final class WopSdkConfigLoader {
                 System.getenv(CONFIG_FILE_ENV));
     }
 
-    /** 测试可注入 sysProp/env 的重载（K13：环境分支可直测）。 */
     static List<DiscoveryCandidate> defaultDiscoveryCandidates(String sysProp, String env) {
         List<DiscoveryCandidate> out = new ArrayList<>();
 

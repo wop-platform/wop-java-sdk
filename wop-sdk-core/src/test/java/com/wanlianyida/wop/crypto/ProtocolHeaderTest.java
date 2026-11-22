@@ -14,10 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * DEK 载荷（alg$key$iv）与 x-wop-sign / x-wop-encrypt 头编解码。
- * §2.2：所有解析失败路径归类 parse（肯定式断言 category）。
- */
 class ProtocolHeaderTest {
 
     /** 解析类失败：类型 WopError + category=parse 双重断言（spec:2.2）。 */
@@ -27,7 +23,6 @@ class ProtocolHeaderTest {
         return e;
     }
 
-    // ==================== DekPayload ====================
 
     @Test
     void dekPayloadEncodeMatchesGoldenVectors() {
@@ -54,13 +49,12 @@ class ProtocolHeaderTest {
         parseError(() -> DekPayload.decode(null));
         parseError(() -> DekPayload.decode(""));
         parseError(() -> DekPayload.decode("AES-256-GCM"));
-        parseError(() -> DekPayload.decode("AES-256-GCM$key"));             // 缺 iv
-        parseError(() -> DekPayload.decode("AES-256-GCM$key$iv$extra"));    // 段数
-        parseError(() -> DekPayload.decode("AES-256-GCM$ke+y$iv"));         // 非法 b64url
-        parseError(() -> DekPayload.decode("$key$iv"));                     // alg 空
+        parseError(() -> DekPayload.decode("AES-256-GCM$key"));
+        parseError(() -> DekPayload.decode("AES-256-GCM$key$iv$extra"));
+        parseError(() -> DekPayload.decode("AES-256-GCM$ke+y$iv"));
+        parseError(() -> DekPayload.decode("$key$iv"));
     }
 
-    // ==================== SignHeader ====================
 
     @Test
     void signHeaderBuildsStructuredValue() {
@@ -87,22 +81,15 @@ class ProtocolHeaderTest {
         parseError(() -> SignHeader.parse(null));
         parseError(() -> SignHeader.parse(""));
         parseError(() -> SignHeader.parse("   "));
-        // 缺空格分隔
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256v1/1800/a/b"));
-        // 段数不足/超数
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/sig"));
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/b/extra"));
-        // 协议版本
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v2/1800/a/b"));
-        // expiredSeconds 非数字/非正
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/x/a/b"));
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/0/a/b"));
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/-5/a/b"));
-        // signedHeaders 空段
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800//b"));
-        // signature 空
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/"));
-        // 签名含 '/'（b64url 非法）
         parseError(() -> SignHeader.parse("WOP-RSA3072-SHA256 v1/1800/a/b/c"));
     }
 
@@ -113,7 +100,6 @@ class ProtocolHeaderTest {
         assertEquals(Arrays.asList("x-wop-b", "x-wop-a"), parsed.signedHeaders());
     }
 
-    // ==================== EncryptHeader ====================
 
     @Test
     void encryptHeaderBuildsL2WithDek() {
@@ -138,11 +124,11 @@ class ProtocolHeaderTest {
     void encryptHeaderRejectsMalformed() {
         parseError(() -> EncryptHeader.parse("L1"));
         parseError(() -> EncryptHeader.parse("l0"));
-        parseError(() -> EncryptHeader.parse("L2"));                 // L2 缺 dek
-        parseError(() -> EncryptHeader.parse("L2;dek="));            // dek 空
-        parseError(() -> EncryptHeader.parse("L2;foo=abc"));         // 未知参数
-        parseError(() -> EncryptHeader.parse("L0;dek=abc"));         // L0 带 dek
-        parseError(() -> EncryptHeader.parse("L2;dek=ab=c"));        // dek 带 =
-        parseError(() -> EncryptHeader.parse(" L2;dek=abc "));       // 空白包裹
+        parseError(() -> EncryptHeader.parse("L2"));
+        parseError(() -> EncryptHeader.parse("L2;dek="));
+        parseError(() -> EncryptHeader.parse("L2;foo=abc"));
+        parseError(() -> EncryptHeader.parse("L0;dek=abc"));
+        parseError(() -> EncryptHeader.parse("L2;dek=ab=c"));
+        parseError(() -> EncryptHeader.parse(" L2;dek=abc "));
     }
 }

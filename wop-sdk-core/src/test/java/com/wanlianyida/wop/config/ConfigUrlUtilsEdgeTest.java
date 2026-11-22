@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** ConfigUrlUtils 校验消息、URL 归一化与路径拼接。 */
 class ConfigUrlUtilsEdgeTest {
 
     private static WopError urlError(String value, String fieldName) {
@@ -35,7 +34,6 @@ class ConfigUrlUtilsEdgeTest {
                 .contains("serverRoot 不得含 query 或 fragment"));
         assertTrue(urlError("https://user:pw@gw.example.com/gateway", "serverRoot").getMessage()
                 .contains("serverRoot 不得含 user-info"));
-        // 空 authority（host 为 null）→ 不是合法 URL
         assertTrue(urlError("https:///x", "serverRoot").getMessage().contains("serverRoot 不是合法 URL"));
     }
 
@@ -49,7 +47,6 @@ class ConfigUrlUtilsEdgeTest {
                 ConfigUrlUtils.validateGatewayUrl("https://gw.example.com", "serverRoot"));
         assertEquals("https://gw.example.com",
                 ConfigUrlUtils.validateGatewayUrl("https://gw.example.com/", "serverRoot"));
-        // 空 user-info（"@" 存在但无凭证）→ 不视为携带凭证，正常归一化
         assertEquals("https://gw.example.com/gateway",
                 ConfigUrlUtils.validateGatewayUrl("https://@gw.example.com/gateway", "serverRoot"));
     }

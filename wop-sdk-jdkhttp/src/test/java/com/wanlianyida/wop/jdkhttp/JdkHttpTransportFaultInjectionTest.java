@@ -15,11 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * 故障注入（JDK HttpURLConnection 适配器网络层）：中途断流/5xx 透传/头名规范化/
- * 无实体状态/错误状态空体/中途中断。
- * 连接拒收与发送前线程中断场景见 {@link JdkHttpTransportTest}（环境确定性更高）。
- */
 class JdkHttpTransportFaultInjectionTest {
 
     private HttpServer server;
@@ -42,7 +37,6 @@ class JdkHttpTransportFaultInjectionTest {
 
     @Test
     void connectionResetDuringBodyWrapped() throws Exception {
-        // 故障：声明 Content-Length=1000 但只写 10 字节即关闭 → IOException 包装为明确异常
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/cut", exchange -> {
             exchange.getResponseHeaders().add("Content-Length", "1000");
@@ -60,7 +54,6 @@ class JdkHttpTransportFaultInjectionTest {
 
     @Test
     void serverErrorStatusPassedThroughUntouched() throws Exception {
-        // 故障：网关 502 —— 适配器只做透传，状态语义由 verify 层/商户决定
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/p", exchange -> {
             byte[] out = "{\"code\":\"OP_GW_5001\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -81,7 +74,6 @@ class JdkHttpTransportFaultInjectionTest {
 
     @Test
     void responseHeaderNamesNormalizedToLowercase() throws Exception {
-        // 契约：适配器送入 verify 层的头名恒小写存储；TransportResponse 为大小写不敏感视图
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/p", exchange -> {
             exchange.getResponseHeaders().add("X-Wop-Sign", "WOP-RSA3072-SHA256 v1/1800/a/b");
@@ -93,14 +85,12 @@ class JdkHttpTransportFaultInjectionTest {
         TransportResponse response = transport.send(
                 new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("x-wop-sign"));
-        // 大小写不敏感视图：任意形态查询命中同一值；存储键恒小写
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("X-WOP-SIGN"));
         assertTrue(response.headers().keySet().stream().allMatch(k -> k.equals(k.toLowerCase())));
     }
 
     @Test
     void emptyBodyResponseMappedToEmptyArray() throws Exception {
-        // 204 无实体 → body 为空数组（verify 层按无 body 响应处理）
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/p", exchange -> exchange.sendResponseHeaders(204, -1));
         server.start();
@@ -114,8 +104,6 @@ class JdkHttpTransportFaultInjectionTest {
 
     @Test
     void errorStatusWithoutBodyMappedToEmptyArray() throws Exception {
-        // 故障：404 且服务器未写错误体（error stream 为 null）→ 按空 body 透传给
-        // verify 层/商户；此时 getInputStream() 会抛 IOException，不可调用
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/p", exchange -> exchange.sendResponseHeaders(404, -1));
         server.start();
@@ -169,7 +157,6 @@ class JdkHttpTransportFaultInjectionTest {
         TransportResponse response = transport.send(
                 new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals(401, response.statusCode());
-        // 完整信封等值比对：contains 断言对畸形/截断 JSON 仍会通过
         assertEquals("{\"code\":\"OP_GW_1001\",\"message\":\"appKey 为空或应用不存在\"}",
                 new String(response.body(), java.nio.charset.StandardCharsets.UTF_8));
     }
@@ -193,7 +180,7 @@ class JdkHttpTransportFaultInjectionTest {
                     new RequestDraft("POST", "/p", headers(), new byte[]{1})));
             assertTrue(ex.getMessage().contains("被中断"));
         } finally {
-            Thread.interrupted();   // 消费 interrupt 标志，避免污染后续测试
+            Thread.interrupted();
         }
     }
 }

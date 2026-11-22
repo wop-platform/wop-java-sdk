@@ -28,15 +28,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * 覆盖闭合：错误分支（catch/守卫）、边界输入与辅助方法。
- */
 class CoverageCloseTest {
 
     private static final AlgorithmSuite RSA = AlgorithmSuite.parse("WOP-RSA3072-SHA256");
     private static final AlgorithmSuite SM2 = AlgorithmSuite.parse("WOP-SM2-SM3");
 
-    // ==================== 策略错误分支 ====================
 
     @Test
     void digestStrategiesRejectNull() {
@@ -94,7 +90,6 @@ class CoverageCloseTest {
 
     @Test
     void nonSm2CurveKeyRejected() throws Exception {
-        // secp256r1 密钥喂 SM2 策略：曲线守卫逐项拒绝（I5）
         KeyPairGenerator generator = KeyPairGenerator.getInstance("EC", new BouncyCastleProvider());
         generator.initialize(new ECGenParameterSpec("secp256r1"));
         KeyPair pair = generator.generateKeyPair();
@@ -106,7 +101,6 @@ class CoverageCloseTest {
                 () -> Sm2KeyEncryptStrategy.INSTANCE.encrypt(Codec.utf8("m"), pair.getPublic()));
         assertThrows(CryptoException.class,
                 () -> Sm2KeyEncryptStrategy.INSTANCE.decrypt(new byte[100], pair.getPrivate()));
-        // 非 EC 密钥（null 之外的形态非法）——null 直接拒绝
         assertThrows(IllegalArgumentException.class, () -> Sm2Support.toPublicParams(null));
         assertThrows(IllegalArgumentException.class, () -> Sm2Support.toPrivateParams(null));
         assertThrows(IllegalArgumentException.class, () -> Sm2Support.decodePoint(null));
@@ -115,7 +109,6 @@ class CoverageCloseTest {
         assertThrows(IllegalArgumentException.class, () -> Sm2Support.requireSm2Domain(null));
     }
 
-    // ==================== Codec / 载荷边界 ====================
 
     @Test
     void codecEdgeCases() {
@@ -135,7 +128,6 @@ class CoverageCloseTest {
                 () -> DekPayload.encode(new DekPayload("AES-256-GCM", new byte[0], new byte[12])));
         assertThrows(WopError.class,
                 () -> DekPayload.encode(new DekPayload("AES-256-GCM", new byte[16], null)));
-        // toString 不泄密钥
         assertFalse(DekPayload.decode(TestVectors.firstById("dekPayload", "dek-rsa")
                 .path("expected").asText()).toString().contains("AAEC"));
     }
@@ -148,9 +140,7 @@ class CoverageCloseTest {
         assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"ab+c\"}")));
         assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"\"}")));
         assertThrows(WopError.class, () -> EncryptedEnvelope.cipherOf(Codec.utf8("{\"encrypted\":\"AAA\"}x")));
-        // 合法带空白包裹
         assertTrue(EncryptedEnvelope.cipherOf(Codec.utf8("  {\"encrypted\":\"AAEC\"}  ")).length == 3);
-        // roundtrip
         byte[] wrapped = EncryptedEnvelope.wrap("AAEC");
         assertArrayEquals(new byte[]{0, 1, 2}, EncryptedEnvelope.cipherOf(wrapped));
     }
@@ -172,12 +162,10 @@ class CoverageCloseTest {
 
     @Test
     void keyCodecEdgeBranches() {
-        // 65B 但首字节非 04 → 走 SPKI 解析失败
         byte[] notPoint = new byte[65];
         notPoint[0] = 0x02;
         assertThrows(WopError.class, () -> KeyCodec.parsePublicKey(
                 java.util.Base64.getEncoder().encodeToString(notPoint), SM2));
-        // PEM 无 body
         assertThrows(WopError.class, () -> KeyCodec.stripPem("-----BEGIN PUBLIC KEY-----x-----END PUBLIC KEY-----"));
     }
 

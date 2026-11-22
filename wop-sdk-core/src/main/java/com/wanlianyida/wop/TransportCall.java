@@ -2,13 +2,8 @@ package com.wanlianyida.wop;
 
 import java.util.Objects;
 
-/**
- * 单笔 execute 向传输层传递的不可变参数（§7.1）。
- * {@link #USE_DEFAULT}（-1）表示使用适配器构造期默认值。
- */
 public final class TransportCall {
 
-    /** 使用适配器默认超时。 */
     public static final int USE_DEFAULT = -1;
 
     private final String serverRoot;
@@ -21,7 +16,6 @@ public final class TransportCall {
         this.readTimeoutMillis = readTimeoutMillis;
     }
 
-    /** 空 call：serverRoot 与超时均走适配器默认。 */
     public static TransportCall empty() {
         return new TransportCall(null, USE_DEFAULT, USE_DEFAULT);
     }

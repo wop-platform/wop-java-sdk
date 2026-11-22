@@ -8,7 +8,6 @@ import com.wanlianyida.wop.crypto.WopSuiteException;
 import java.util.ArrayList;
 import java.util.List;
 
-/** §3.4 语义校验与字段归一化。 */
 final class ConfigValidator {
 
     private ConfigValidator() {

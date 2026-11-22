@@ -16,10 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/**
- * A1/A2 密钥加密向量：OAEP 显式双 SHA-256 解包 + MGF1-SHA-1 陷阱拒绝 + roundtrip；
- * SM2 C1C3C2 固定 k 密文解包 + C1C2C3 顺序负向量。
- */
 class KeyEncryptVectorTest {
 
     private static final AlgorithmSuite RSA2048 = AlgorithmSuite.parse("WOP-RSA2048-SHA256");
@@ -33,7 +29,6 @@ class KeyEncryptVectorTest {
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa2048").path("privatePkcs8B64").asText(), RSA2048);
         byte[] cipher = Codec.b64UrlDecode(vector.path("cipherB64u").asText());
         byte[] plain = RsaOaepKeyEncryptStrategy.INSTANCE.decrypt(cipher, priv);
-        // 字节级：解包明文 = DEK 载荷
         assertEquals(vector.path("expectedPlaintext").asText(), new String(plain, StandardCharsets.UTF_8));
     }
 
@@ -43,7 +38,6 @@ class KeyEncryptVectorTest {
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA3072);
         byte[] cipher = Codec.b64UrlDecode(vector.path("cipherB64u").asText());
         byte[] plain = RsaOaepKeyEncryptStrategy.INSTANCE.decrypt(cipher, priv);
-        // 字节级：解包明文 = DEK 载荷
         assertEquals(vector.path("expectedPlaintext").asText(), new String(plain, StandardCharsets.UTF_8));
     }
 
@@ -57,7 +51,6 @@ class KeyEncryptVectorTest {
 
     @Test
     void oaepMgf1Sha1TrapRejected() {
-        // F2 钉子：以错误 MGF1（SHA-1）包装的密文，用规格参数（双 SHA-256）解包必须失败
         JsonNode vector = TestVectors.firstById("keyEncrypt", "oaep3072-mgf1sha1-trap");
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA3072);
         byte[] trap = Codec.b64UrlDecode(vector.path("cipherB64u").asText());
@@ -66,7 +59,6 @@ class KeyEncryptVectorTest {
 
     @Test
     void oaepRoundtrip() {
-        // OAEP 加密随机化无法字节钉；产出密文经规格参数解包须等于明文
         JsonNode vector = TestVectors.firstById("keyEncrypt", "oaep3072-wrap-roundtrip");
         PublicKey pub = KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072);
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA3072);
@@ -99,7 +91,6 @@ class KeyEncryptVectorTest {
 
     @Test
     void sm2C1c2c3OrderRejected() {
-        // D9 钉子：旧国标 C1C2C3 顺序密文，按 C1C3C2 解密必须失败
         JsonNode vector = TestVectors.firstById("keyEncrypt", "sm2-encrypt-c1c2c3-mismatch");
         PrivateKey priv = KeyCodec.parsePrivateKey(TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
         byte[] cipher = Codec.b64UrlDecode(vector.path("cipherB64u").asText());
@@ -125,7 +116,6 @@ class KeyEncryptVectorTest {
 
     @Test
     void nonSm2KeyRejectedBySm2Strategy() {
-        // 非 SM2 密钥喂 SM2 策略 → CryptoException（I5 合规边界）
         PrivateKey rsaPriv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA3072);
         PublicKey rsaPub = KeyCodec.parsePublicKey(TestVectors.keys("rsa3072").path("publicSpkiB64").asText(), RSA3072);
         assertThrows(CryptoException.class,
@@ -167,7 +157,6 @@ class KeyEncryptVectorTest {
 
     @Test
     void wrongKeyCannotUnwrap() {
-        // 3072 密钥对的密文用 4096 私钥解包必失败（长度即不匹配）
         JsonNode vector = TestVectors.firstById("keyEncrypt", "oaep3072-unwrap");
         PrivateKey wrongPriv = KeyCodec.parsePrivateKey(TestVectors.keys("rsa4096").path("privatePkcs8B64").asText(), RSA4096);
         byte[] cipher = Codec.b64UrlDecode(vector.path("cipherB64u").asText());

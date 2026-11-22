@@ -10,10 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * F2 canonicalRequest 构造：5 段 '\n' 连接、URLEncoder 语义（空格→%20）、
- * Trimall、ASCII 升序、POST 空查询段保留（与网关 CanonicalRequestBuilder 逐字节对齐）。
- */
 class CanonicalRequestTest {
 
     @Test
@@ -32,12 +28,10 @@ class CanonicalRequestTest {
 
     @Test
     void urlencodeEncodesSpaceAsPercent20() {
-        // Java URLEncoder 语义：空格 → '+' 需替换回 %20；'/' 与 ';' 等保留字也转义
         assertEquals("a%20b", CanonicalRequest.urlencode("a b"));
         assertEquals("sha-256%204cf7ab3b", CanonicalRequest.urlencode("sha-256 4cf7ab3b"));
         assertEquals("L2%3Bdek%3Dabc", CanonicalRequest.urlencode("L2;dek=abc"));
         assertEquals("%2Fpath", CanonicalRequest.urlencode("/path"));
-        // 中文与 em-dash UTF-8 转义
         assertEquals("%E8%B7%A8%E8%AF%AD%E8%A8%80", CanonicalRequest.urlencode("跨语言"));
         assertEquals("", CanonicalRequest.urlencode(null));
         assertEquals("", CanonicalRequest.urlencode(""));
@@ -79,7 +73,6 @@ class CanonicalRequestTest {
 
     @Test
     void goldenFullCanonicalMatchesGatewayShape() {
-        // 与网关侧拼装逐字节对齐的完整样例（含空 query 段）
         Map<String, String> headers = new LinkedHashMap<String, String>();
         headers.put("x-wop-appkey", "app_001");
         headers.put("x-wop-nonce", "n0nce123");

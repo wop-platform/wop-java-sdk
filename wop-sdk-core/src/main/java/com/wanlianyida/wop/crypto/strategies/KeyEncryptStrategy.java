@@ -3,12 +3,8 @@ package com.wanlianyida.wop.crypto.strategies;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 
-/**
- * ③ 密钥加密策略（DEK 非对称包装，crypto spec §4.1）。
- */
 public interface KeyEncryptStrategy {
 
-    /** 以公钥非对称包装明文 DEK。 */
     byte[] encrypt(byte[] plainKey, PublicKey publicKey);
 
     /**
@@ -19,9 +15,7 @@ public interface KeyEncryptStrategy {
         return encrypt(plainKey, publicKey);
     }
 
-    /** 以私钥解包 DEK 密文。 */
     byte[] decrypt(byte[] cipherText, PrivateKey privateKey);
 
-    /** 线上算法名。 */
     String algorithmName();
 }

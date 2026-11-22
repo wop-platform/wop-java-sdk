@@ -17,15 +17,6 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Arrays;
 
-/**
- * 国密签名策略：SM3withSM2。
- * <p>
- * 线上编码 = <b>裸 r‖s 固定 64 字节</b>（D9：线上禁止 DER/ASN.1）；JVM 内部经 BC
- * {@link SM2Signer}（DER 编码）产出后转换。
- * 验签长度 ≠ 64 一律 false（spec §3.3① 定长前置校验）。
- * userId 必传（D14）：SM2 国标 ZA 杂凑含 userId——出向 = x-wop-appkey、
- * 入向 = 平台协议固定值，由调用方显式传入；null 显式拒绝（无默认回退）。
- */
 public final class Sm2SignatureStrategy implements SignatureStrategy {
 
     public static final Sm2SignatureStrategy INSTANCE = new Sm2SignatureStrategy();
@@ -35,7 +26,6 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
     /** 裸 r||s 定长（sm2p256v1 阶 n 为 256bit，r、s &lt; n 恒可装入 32B）。 */
     private static final int RS_BYTES = 32;
 
-    /** 无状态单例，私有构造。 */
     private Sm2SignatureStrategy() {
     }
 
@@ -53,7 +43,6 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         }
     }
 
-    /** 验签（长度 ≠ 64B 前置返回 false，spec §3.3①；userId 贯通 D14）。 */
     @Override
     public boolean verify(byte[] data, byte[] signature, PublicKey publicKey, byte[] userId) {
         if (signature == null || signature.length != RS_BYTES * 2) {
@@ -70,13 +59,11 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         }
     }
 
-    /** 线上算法名 SM3withSM2。 */
     @Override
     public String algorithmName() {
         return ALGORITHM;
     }
 
-    /** userId 必传（D14：出向=appKey、入向=平台协议固定值）；null 显式拒绝，禁止静默回退默认。 */
     private static ParametersWithID withId(org.bouncycastle.crypto.CipherParameters params, byte[] userId) {
         if (userId == null) {
             throw new IllegalArgumentException("SM2 userId 缺失（D14：必须显式传入，无默认回退）");
@@ -84,7 +71,6 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         return new ParametersWithID(params, userId);
     }
 
-    /** BC 签名（DER SEQUENCE{r, s}）→ 裸 r||s 64B（D9 线上编码）。 */
     private static byte[] derToRs(byte[] der) throws IOException {
         ASN1Sequence sequence = (ASN1Sequence) ASN1Primitive.fromByteArray(der);
         BigInteger r = ASN1Integer.getInstance(sequence.getObjectAt(0)).getValue();
@@ -92,7 +78,6 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         return concat(to32(r), to32(s));
     }
 
-    /** 裸 r||s 64B → DER SEQUENCE{r, s}（仅 JVM 内部喂 BC 验签器）。 */
     private static byte[] rsToDer(byte[] rs) throws IOException {
         BigInteger r = new BigInteger(1, Arrays.copyOfRange(rs, 0, RS_BYTES));
         BigInteger s = new BigInteger(1, Arrays.copyOfRange(rs, RS_BYTES, RS_BYTES * 2));
@@ -114,7 +99,6 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         return out;
     }
 
-    /** 字节拼接。 */
     private static byte[] concat(byte[] a, byte[] b) {
         byte[] out = new byte[a.length + b.length];
         System.arraycopy(a, 0, out, 0, a.length);

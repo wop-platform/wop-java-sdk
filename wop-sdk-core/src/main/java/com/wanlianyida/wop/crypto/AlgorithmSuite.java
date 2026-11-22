@@ -20,19 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * 算法套件（F1，crypto spec §3/§4.4）：securityReq 原子解析 → 四维策略 + 协议标签。
- * <p>
- * 不可变；策略为无状态进程级单例（D7）；映射集中注册、无运行时配置入口（D13/R5）。
- * 解析规则（spec §2）：
- * <ul>
- *   <li>空值/空白、非三段式、前缀非 WOP → {@link WopSuiteException.Kind#PARSE}（明确）</li>
- *   <li>密钥/摘要算法不在支持列表、跨族组合 → {@link WopSuiteException.Kind#UNSUPPORTED}（明确）</li>
- * </ul>
- */
 public final class AlgorithmSuite {
 
-    /** 唯一注册表：合法 securityReq → 套件（D13）。 */
     private static final Map<String, AlgorithmSuite> REGISTRY = buildRegistry();
 
     private static final Set<String> KNOWN_KEY_ALGORITHMS =
@@ -40,7 +29,6 @@ public final class AlgorithmSuite {
     private static final Set<String> KNOWN_DIGEST_ALGORITHMS =
             Collections.unmodifiableSet(new HashSet<>(Arrays.asList("SHA256", "SM3")));
 
-    /** Java 8 兼容注册表装配（保持 Map.of 插入序与不可变语义）。 */
     private static Map<String, AlgorithmSuite> buildRegistry() {
         Map<String, AlgorithmSuite> registry = new LinkedHashMap<>();
         registry.put("WOP-RSA2048-SHA256", new AlgorithmSuite("WOP-RSA2048-SHA256", "RSA", 2048, "SHA256",
@@ -90,7 +78,6 @@ public final class AlgorithmSuite {
         this.digest = digest;
     }
 
-    /** 解析 securityReq：先纯格式校验，再查注册表（合法组合的原子装配）。 */
     public static AlgorithmSuite parse(String securityReq) {
         if (securityReq == null || securityReq.trim().isEmpty()) {
             throw new WopSuiteException(WopSuiteException.Kind.PARSE, "securityReq 为空（期望 WOP-<密钥算法>-<摘要算法>）");
@@ -116,22 +103,18 @@ public final class AlgorithmSuite {
                 "不支持的算法组合: '" + securityReq + "'（国际密钥配国际摘要、国密密钥配国密摘要，跨族禁止）");
     }
 
-    /** 套件标签（与线上 securityReq 逐字一致，如 WOP-RSA3072-SHA256）。 */
     public String securityReq() {
         return securityReq;
     }
 
-    /** 密钥算法族：RSA / SM2。 */
     public String keyAlgorithm() {
         return keyAlgorithm;
     }
 
-    /** RSA 2048/3072/4096；SM2 为 0（曲线固定 sm2p256v1）。 */
     public int keyLength() {
         return keyLength;
     }
 
-    /** 摘要算法名：SHA256 / SM3。 */
     public String digestAlgorithm() {
         return digestAlgorithm;
     }
@@ -146,28 +129,23 @@ public final class AlgorithmSuite {
         return expectedDekAlg;
     }
 
-    /** 签名策略（对 canonicalRequest 加签/验签）。 */
     public SignatureStrategy signature() {
         return signature;
     }
 
 
-    /** 线上签名定长（F7）：RSA = 密钥位数字节数（2048→256B / 3072→384B / 4096→512B）；SM2 = 裸 r‖s 64B（D9）。 */
     public int signatureLength() {
         return "SM2".equals(keyAlgorithm) ? 64 : keyLength / 8;
     }
 
-    /** 密钥加密策略（DEK 非对称包装/解包）。 */
     public KeyEncryptStrategy keyEncrypt() {
         return keyEncrypt;
     }
 
-    /** 报文加密策略（L2 信封对称加解密）。 */
     public MessageEncryptStrategy messageEncrypt() {
         return messageEncrypt;
     }
 
-    /** 摘要策略（x-wop-content-digest 底层哈希）。 */
     public DigestStrategy digest() {
         return digest;
     }

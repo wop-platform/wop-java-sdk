@@ -5,11 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.InputStream;
 
-/**
- * 黄金向量装载（wop-specs crypto/crypto-vectors.json 真源：构建期按 pom wopSpecsRef 钉版
- * 拉取 + sha256 校验，经 target/wop-specs 进入测试 classpath，本仓不保留副本）。
- * 仅测试代码使用，禁止生产代码引用。
- */
 public final class TestVectors {
 
     private static final JsonNode ROOT = load();
@@ -41,7 +36,6 @@ public final class TestVectors {
         throw new IllegalStateException("向量缺失: " + array + "/" + id);
     }
 
-    /** formatRules 向量按 id 取值。 */
     public static String formatRuleValue(String id) {
         return firstById("formatRules", id).path("value").asText();
     }

@@ -10,12 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
-/**
- * WopError 契约（§2.2）：category 闭集七值、工厂双变体全覆盖、模糊文案精确断言。
- */
 class WopErrorTest {
 
-    // spec:2.2 —— category 闭集：小写 ASCII 逐值枚举（禁止自造取值）
     @Test
     void categoryClosedSetIsSevenLowercaseValues() {
         List<String> names = new ArrayList<>();
@@ -37,7 +33,6 @@ class WopErrorTest {
         assertEquals("一致性失败", WopError.consistency("一致性失败").getMessage());
     }
 
-    // spec:2.2 —— 明确文案类：cause 变体（cause 必须透传）
     @Test
     void causeVariantsPropagateCause() {
         Throwable root = new IllegalStateException("root");
@@ -60,7 +55,6 @@ class WopErrorTest {
         assertEquals(WopError.Category.decrypt, WopError.decrypt().category());
     }
 
-    // spec:2.2 —— 模糊文案：固定全文精确断言（防 oracle，禁止 contains）
     @Test
     void signatureFactoryUsesFixedOpaqueMessage() {
         assertEquals("签名验证失败", WopError.signature().getMessage());
@@ -76,7 +70,6 @@ class WopErrorTest {
         assertNull(WopError.signature().getCause());
         assertNull(WopError.decrypt().getCause());
     }
-    // spec:2.2 —— 传输层保留异常（okhttp/jdkhttp/unirest 仍依赖）：构造器契约透传覆盖
     @Test
     void wopSdkExceptionConstructorsPropagate() {
         RuntimeException root = new IllegalStateException("root");

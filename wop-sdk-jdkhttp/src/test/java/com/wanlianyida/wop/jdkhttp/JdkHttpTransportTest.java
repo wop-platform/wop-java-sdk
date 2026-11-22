@@ -22,9 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * JDK HttpURLConnection 适配器：com.sun.net.httpserver 覆盖请求/响应映射与错误传播。
- */
 class JdkHttpTransportTest {
 
     private HttpServer server;
@@ -138,7 +135,6 @@ class JdkHttpTransportTest {
 
     @Test
     void connectionFailureWrappedAsSdkException() {
-        // 无监听端口（保留 127.0.0.1 上一个几乎必然未占用的端口段）
         JdkHttpTransport transport = new JdkHttpTransport("http://127.0.0.1:1");
         assertThrows(WopSdkException.class,
                 () -> transport.send(new RequestDraft("POST", "/p", headers(), new byte[]{1})));
@@ -153,7 +149,7 @@ class JdkHttpTransportTest {
             assertThrows(WopSdkException.class, () -> transport.send(
                     new RequestDraft("POST", "/gateway/x", headers(), new byte[]{1})));
         } finally {
-            Thread.interrupted();   // 消费 interrupt 标志，避免污染后续测试
+            Thread.interrupted();
         }
     }
 
@@ -164,16 +160,14 @@ class JdkHttpTransportTest {
         TransportResponse response = trailing.send(
                 new RequestDraft("HEAD", "gateway/x", headers("x-wop-appkey", "a"), null));
         assertEquals(200, response.statusCode());
-        assertEquals("GET", seenMethod.get());   // HEAD 归一为 GET（保留原 java.net.http 版归一语义）
+        assertEquals("GET", seenMethod.get());
 
         JdkHttpTransport blank = new JdkHttpTransport("   ");
         assertThrows(WopSdkException.class, () -> blank.send(
                 new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
     }
 
-    // spec:max-response-bytes —— 11MB 上限边界：超 1 字节拒 / 恰好上限过（流式计数，读取过程中生效）
 
-    /** 启动返回固定长度 0x5A 填充体的服务器（大body场景，避免在内存里准备期望值）。 */
     private String startFixedBody(int length) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/big", exchange -> {
@@ -218,7 +212,6 @@ class JdkHttpTransportTest {
 
     @Test
     void postWithoutWireBodySendsEmptyBody() throws Exception {
-        // POST + wireBody=null（buildRequest 空数组 body 归一产物）→ 发送空体而非 NPE
         String base = start("");
         JdkHttpTransport transport = new JdkHttpTransport(base);
         TransportResponse response = transport.send(
@@ -227,7 +220,6 @@ class JdkHttpTransportTest {
         assertEquals(0, seenBody.get().length);
     }
 
-    // send(draft, TransportCall) 覆盖路径：null call / serverRoot+请求级超时 / 空串 serverRoot
 
     @Test
     void sendWithNullCallUsesAdapterDefaults() throws Exception {
@@ -242,7 +234,6 @@ class JdkHttpTransportTest {
     @Test
     void callServerRootAndTimeoutsOverrideBaseUrl() throws Exception {
         String base = start("ok");
-        // 无 baseUrl：serverRoot 覆盖 + 请求级 connect/read 超时生效才能拿到 200
         JdkHttpTransport transport = new JdkHttpTransport();
         TransportResponse response = transport.send(
                 new RequestDraft("POST", "/gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}),
@@ -250,7 +241,6 @@ class JdkHttpTransportTest {
         assertEquals(200, response.statusCode());
         assertEquals("POST", seenMethod.get());
 
-        // 空串 serverRoot 视为未设置 → 走绝对 URL
         assertEquals(200, transport.send(
                 new RequestDraft("POST", base + "/gateway/x", headers(), new byte[]{1}),
                 TransportCall.of("", TransportCall.USE_DEFAULT, TransportCall.USE_DEFAULT)).statusCode());

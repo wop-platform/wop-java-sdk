@@ -1,8 +1,5 @@
 package com.wanlianyida.wop;
 
-/**
- * execute 链路非 2xx 网关响应异常（§7.5）。
- */
 public final class WopGatewayResponseException extends WopSdkException {
 
     private final int statusCode;
@@ -14,12 +11,10 @@ public final class WopGatewayResponseException extends WopSdkException {
         this.body = body == null ? new byte[0] : body.clone();
     }
 
-    /** HTTP 状态码。 */
     public int statusCode() {
         return statusCode;
     }
 
-    /** 响应体快照（可能为空数组）。 */
     public byte[] body() {
         return body.clone();
     }

@@ -19,10 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * WopSdkConfig / HttpClientSettings / Builder 的值语义：
- * equals 九字段矩阵、transport 引用比较、打码输出、backups 防御拷贝、Builder null 安全。
- */
 class ConfigValueSemanticsTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();

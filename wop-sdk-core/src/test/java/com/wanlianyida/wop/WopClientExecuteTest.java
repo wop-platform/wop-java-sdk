@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** P1：execute 双参、非 2xx、verifyCallback 凭证覆盖。 */
 class WopClientExecuteTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -142,7 +141,6 @@ class WopClientExecuteTest {
 
     @Test
     void executeCarriesRequestIdHeaderUnsigned() {
-        // execute 路径的附录 I 透传断言：显式值 trim 上行、恒不入 signedHeaders、缺省生成 UUID
         AtomicReference<RequestDraft> seen = new AtomicReference<>();
         Transport transport = new Transport() {
             @Override
@@ -158,7 +156,6 @@ class WopClientExecuteTest {
             @Override
             public TransportResponse send(RequestDraft draft, TransportCall call) {
                 seen.set(draft);
-                // 空 header 的 200：入向 verify 落 ok=false（永不抛），不影响出向断言
                 return new TransportResponse(200, Collections.emptyMap(), new byte[0]);
             }
         };
@@ -170,14 +167,12 @@ class WopClientExecuteTest {
         SignHeader.Parsed sign = SignHeader.parse(seen.get().headers().get("x-wop-sign"));
         assertTrue(!sign.signedHeaders().contains("x-wop-request-id"));
 
-        // 未传 → 缺省生成 UUID（去连字符，小写 32 hex，附录 I/I3）
         client.execute("POST", "/gateway/x", "{}".getBytes(), SecurityLevel.L0);
         assertTrue(seen.get().headers().get("x-wop-request-id").matches("[0-9a-f]{32}"));
     }
 
     @Test
     void executeCarriesSubMchIdHeaderSigned() {
-        // ISV D-13：execute 路径同样把子商户身份头写入并入签；仅 subMchId 不需要 sdkConfig 覆盖
         AtomicReference<RequestDraft> seen = new AtomicReference<>();
         Transport transport = new Transport() {
             @Override
@@ -209,7 +204,6 @@ class WopClientExecuteTest {
 
     @Test
     void verifyIgnoresSubMchIdOnlyOptionsWithoutSdkConfig() {
-        // 同一份 options 只带 subMchId 时，入向验签不应要求 fromConfig（凭证走默认）
         WopClient builderClient = WopClient.builder()
                 .appKey("app_001")
                 .suite("WOP-RSA3072-SHA256")

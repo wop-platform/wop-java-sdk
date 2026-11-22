@@ -38,10 +38,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * 故障注入（Unirest 适配器网络层）：读超时/中途断流/5xx 透传/头名规范化/204 无实体。
- * 连接拒收场景见 {@link UnirestTransportTest}（本地保留端口，环境确定性更高）。
- */
 class UnirestTransportFaultInjectionTest {
 
     /** Java 8 无 Map.of：成对参数构造小请求头。 */
@@ -62,7 +58,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void readTimeoutWrappedAsSdkException() throws Exception {
-        // 故障：服务器接受连接后不回任何字节 + 整体请求超时 500ms → 确定性超时
         server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE));
         server.start();
         UnirestTransport transport = new UnirestTransport(server.url("/").toString(),
@@ -74,7 +69,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void midBodyDisconnectWrapped() throws Exception {
-        // 故障：响应体传输中途断连 → 流读取 IOException 包装为明确异常
         server.enqueue(new MockResponse().setResponseCode(200)
                 .setBody("0123456789")
                 .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY));
@@ -107,7 +101,6 @@ class UnirestTransportFaultInjectionTest {
         TransportResponse response = transport.send(new RequestDraft("POST", "/p",
                 headers("x-wop-request-id", "req-401"), new byte[]{1}));
         assertEquals(401, response.statusCode());
-        // 完整信封等值比对：contains 断言对畸形/截断 JSON 仍会通过
         assertEquals(envelope, new String(response.body(), StandardCharsets.UTF_8));
         assertEquals("req-401", server.takeRequest().getHeader("x-wop-request-id"));
     }
@@ -136,7 +129,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void connectionResetDuringReadWrapped() throws Exception {
-        // 故障：声明 Content-Length=1000 只写 10 字节即关闭 → 强制 RST，读流 IOException 包装为明确异常
         com.sun.net.httpserver.HttpServer resetServer = com.sun.net.httpserver.HttpServer.create(
                 new java.net.InetSocketAddress("127.0.0.1", 0), 0);
         resetServer.createContext("/cut", exchange -> {
@@ -159,7 +151,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void readErrorDuringStreamWrapped() throws Exception {
-        // 故障：响应体传输中强制 RST（setSoLinger(0) 关闭即重置）→ 读流真实 IOException，覆盖 catch 分支
         try (java.net.ServerSocket listener = new java.net.ServerSocket(0, 1,
                 java.net.InetAddress.getLoopbackAddress())) {
             Thread killer = new Thread(() -> {
@@ -168,14 +159,14 @@ class UnirestTransportFaultInjectionTest {
                     int a = -1, b = -2, c = -3, d = -4;
                     while (!(a == '\r' && b == '\n' && c == '\r' && d == '\n')) {
                         a = b; b = c; c = d; d = in.read();
-                        if (d < 0) return; // 客户端提前断开，放弃注入
+                        if (d < 0) return;
                     }
-                    in.read(); // 请求 body 1 字节，确保客户端发送完成
+                    in.read();
                     socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n"
                             .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
                     socket.getOutputStream().write(new byte[10]);
                     socket.getOutputStream().flush();
-                    socket.setSoLinger(true, 0); // close → RST
+                    socket.setSoLinger(true, 0);
                 } catch (java.io.IOException ignored) {
                 }
             });
@@ -190,7 +181,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void readErrorFromInjectedStreamWrapped() {
-        // 故障：注入 Client 产出读取即抛 IOException 的响应流 → 覆盖 readBodyLimited 读流异常路径
         InputStream body = new InputStream() {
             @Override public int read() throws IOException { throw new IOException("读流故障"); }
         };
@@ -202,7 +192,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void closeFailureAfterBodyIgnored() {
-        // 故障：body 读完（EOF）后 close() 抛 IOException → 已读结果不受影响，覆盖关闭异常吞没路径
         InputStream body = new InputStream() {
             @Override public int read() { return -1; }
             @Override public void close() throws IOException { throw new IOException("close 故障"); }
@@ -216,7 +205,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void nullContentMappedToEmpty() {
-        // 边界：getContent() 返回 null（无实体语义）→ 空 body 交付
         UnirestTransport transport = injectedTransport((InputStream) null);
         TransportResponse response = transport.send(
                 new RequestDraft("POST", "/p", headers(), new byte[]{1}));
@@ -226,7 +214,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void declaredLengthMismatchRejected() {
-        // 截断校验：声明 Content-Length=100 实收 10 字节，读流正常 EOF（无读错误）→ 拒绝交付截断体
         Headers headers = new Headers();
         headers.add("Content-Length", "100");
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
@@ -238,7 +225,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void headResponseWithNonZeroLengthNotTruncated() {
-        // HEAD 无响应体（RFC 9110 §9.3.2），CL 描述 GET 表示长度 → 跳过截断校验
         Headers headers = new Headers();
         headers.add("Content-Length", "100");
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
@@ -250,7 +236,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void headWithOversizedDeclaredLengthNotRejected() {
-        // HEAD 探测 >11MiB 资源：CL 描述 GET 表示大小（合法），无体即无读侧约束 → 不抛超限/截断
         Headers headers = new Headers();
         headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES * 2));
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
@@ -262,7 +247,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void bodylessStatusesSkipLengthCheck() {
-        // 1xx/204/205/304 无响应体（RFC 9110 §6.4），非零 CL 是表示描述 → 不判截断
         for (int status : new int[]{100, 204, 205, 304}) {
             Headers headers = new Headers();
             headers.add("Content-Length", "100");
@@ -277,7 +261,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void malformedContentLengthRejectedAsSdkException() {
-        // 畸形 CL 必须以 WopSdkException 落界（而非 NumberFormatException 泄漏）
         Headers headers = new Headers();
         headers.add("Content-Length", "12ab");
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
@@ -300,7 +283,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void declaredLengthOverLimitRejected() {
-        // 声明超 11MiB 上限：显式拒绝（long 解析，int 范围外的合法值也不抛 NFE）
         Headers headers = new Headers();
         headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES + 1));
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
@@ -312,7 +294,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void oversizedBodyWithoutDeclaredLengthRejected() {
-        // chunked 语义（无 Content-Length）：实际读满上限+1 才置位 overflow → 读侧超限防线
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
                 new ByteArrayInputStream(new byte[UnirestTransport.MAX_RESPONSE_BYTES + 1]), new Headers()));
         WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(
@@ -322,7 +303,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void duplicateContentLengthConsistentAccepted() {
-        // RFC 9110 §8.6：重复 CL 解析后数值一致（"0100" 等价 "100"）是合法的，不得误拒
         Headers headers = new Headers();
         headers.add("Content-Length", "100");
         headers.add("Content-Length", "0100");
@@ -336,7 +316,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void duplicateContentLengthInconsistentRejected() {
-        // 重复 CL 值不一致是消息走私向量（响应拆分），必须显式拒绝而非静默取其一
         Headers headers = new Headers();
         headers.add("Content-Length", "100");
         headers.add("Content-Length", "0");
@@ -349,7 +328,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void signedContentLengthRejected() {
-        // Long.parseLong 接受 "+5"，但 RFC 9110 §8.6 的 CL 语法仅 1*DIGIT，带符号即畸形
         Headers headers = new Headers();
         headers.add("Content-Length", "+5");
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
@@ -361,7 +339,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void oversizedNumericContentLengthRejected() {
-        // 20 位纯数字超出 long 表示范围：语法合法但数值不可表示，按畸形落界
         Headers headers = new Headers();
         headers.add("Content-Length", "99999999999999999999");
         UnirestTransport transport = injectedTransport(rawResponseWithBody(
@@ -385,7 +362,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void precheckRejectsBeforeReadingBody() {
-        // C4 行为规格：超限声明在读体之前拒绝——计数流一次 read 都不应发生
         Headers headers = new Headers();
         headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES + 1));
         AtomicInteger reads = new AtomicInteger();
@@ -402,7 +378,6 @@ class UnirestTransportFaultInjectionTest {
 
     @Test
     void oversizedDeclaredWithFailingCloseStillRejected() {
-        // 先验拒绝后的防御性关闭失败不得吞掉既定错误
         Headers headers = new Headers();
         headers.add("Content-Length", String.valueOf((long) UnirestTransport.MAX_RESPONSE_BYTES + 1));
         InputStream failingClose = new ByteArrayInputStream(new byte[0]) {
@@ -425,7 +400,6 @@ class UnirestTransportFaultInjectionTest {
         assertTrue(ex.getMessage().contains("畸形"), ex.getMessage());
     }
 
-    /** RawResponse 桩：getContent() 返回给定流（null 表示无实体），getHeaders() 返回给定头，其余为安全桩值。 */
     private static RawResponse rawResponseWithBody(InputStream body) {
         return rawResponseWithBody(body, new Headers(), 200);
     }
@@ -455,10 +429,6 @@ class UnirestTransportFaultInjectionTest {
         };
     }
 
-    /** 以产出指定响应的伪 Client 构造 Transport（无网络，异常路径全确定性）。
-     * Client.websocket 签名引用 java.net.http.WebSocket.Listener（JDK 11+ 类型），
-     * Java 8 源级无法显式实现该接口 → 反射动态代理，编译期不触碰该签名；
-     * Unirest 4.x 本身要求 Java 11+ 运行时（jar 字节码 major 55），本桩仅在 11+ 测试档执行。 */
     @SuppressWarnings("unchecked")
     private static UnirestTransport injectedTransport(RawResponse response) {
         Client fakeClient = (Client) java.lang.reflect.Proxy.newProxyInstance(

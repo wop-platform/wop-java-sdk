@@ -29,11 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * F6 校验顺序 + I7 模糊化 + D2/I1/I5 负向量：verifyResponse / verifyCallback。
- * 平台侧响应由 PlatformRig 按协议拼装（平台私钥加签、商户公钥包 DEK）。
- * spec:D14：平台侧验签/签名 userId = 协议固定值（与入向验签一致；出向由商户显式传 appKey）。
- */
 class WopClientVerifyTest {
 
     private static final String MERCHANT_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -43,13 +38,11 @@ class WopClientVerifyTest {
 
     private static final AlgorithmSuite RSA = AlgorithmSuite.parse("WOP-RSA3072-SHA256");
 
-    /** 商户客户端（merchant=rsa3072 对，platform=rsa4096 公钥）。 */
     private final WopClient client = WopClient.builder()
             .appKey("app_001").suite("WOP-RSA3072-SHA256")
             .merchantPrivateKey(MERCHANT_PRIV).platformPublicKey(PLATFORM_PUB)
             .build();
 
-    /** 平台响应快照（record 等价值语义不需要，纯数据载体）。 */
     static final class PlatformResponse {
 
         private final Map<String, String> headers;
@@ -82,7 +75,6 @@ class WopClientVerifyTest {
             this.merchantPubB64 = merchantPubB64;
         }
 
-        /** 拼装响应：L2 时对 plain 全文加密，wire 为密文信封；出站签名头完整。 */
         PlatformResponse respond(String path, byte[] plain, boolean l2) {
             AlgorithmSuite suite = AlgorithmSuite.parse(securityReq);
             PrivateKey platformPriv = KeyCodec.parsePrivateKey(platformPrivB64, suite);
@@ -135,7 +127,6 @@ class WopClientVerifyTest {
 
     private static final PlatformRig RSA_RIG = new PlatformRig("WOP-RSA3072-SHA256", PLATFORM_PRIV, MERCHANT_PUB);
 
-    // ==================== 正向：L0 / L2 / 回调 / Transport 重载 ====================
 
     @Test
     void verifyResponseL0Ok() {
@@ -174,7 +165,6 @@ class WopClientVerifyTest {
         assertTrue(client.verifyResponse(transport, draft).ok());
     }
 
-    // ==================== 验签类（I7 模糊） ====================
 
     @Test
     void tamperedSignatureFailsVaguely() {
@@ -207,7 +197,6 @@ class WopClientVerifyTest {
 
     @Test
     void crossFamilySignatureLengthFailsExplicitly() {
-        // RSA 套件 + 86 字符（64B，SM2 形态）签名 → 定长前置校验，协议类明确拒绝（interop n07/n08 同族）
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         SignHeader.Parsed parsed = SignHeader.parse(resp.headers().get("x-wop-sign"));
@@ -243,11 +232,9 @@ class WopClientVerifyTest {
                 client.verifyResponse(resp.headers(), body, "/p").reason());
     }
 
-    // ==================== 完整性类（D2/I1，明确） ====================
 
     @Test
     void digestMismatchExplicit() {
-        // 签名有效但 body 被换 → 摘要不匹配（明确）
         byte[] body = Codec.utf8("{\"v\":1}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         VerifyResult result = client.verifyResponse(resp.headers(), Codec.utf8("{\"v\":2}"), "/p");
@@ -257,7 +244,6 @@ class WopClientVerifyTest {
 
     @Test
     void bodyWithoutDigestHeaderRejected() {
-        // D2：有 body 必传（重签去掉 digest 头与声明后仍必须拒）
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         resp.headers().remove("x-wop-content-digest");
@@ -268,7 +254,6 @@ class WopClientVerifyTest {
 
     @Test
     void digestPresentWithoutBodyRejected() {
-        // D2：无 body → digest 头必须缺席
         PlatformResponse resp = RSA_RIG.respond("/p", Codec.utf8("x"), false);
         assertEquals(VerifyResult.Reason.INVALID_DIGEST_HEADER,
                 client.verifyResponse(resp.headers(), new byte[0], "/p").reason());
@@ -277,10 +262,10 @@ class WopClientVerifyTest {
     @Test
     void digestHeaderFormatViolationsExplicit() {
         String[] bad = {
-                "sha-256  23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",  // 双空格
-                "sha-256 23592263765CF506D07CC8614C09067E6DE38E64C53E5B672C022532D01737CF",    // 大写 hex
-                "sha-256 3592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",     // 63 字符
-                "sm3 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",        // 跨族
+                "sha-256  23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",
+                "sha-256 23592263765CF506D07CC8614C09067E6DE38E64C53E5B672C022532D01737CF",
+                "sha-256 3592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",
+                "sm3 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",
         };
         byte[] body = Codec.utf8("{}");
         for (String badDigest : bad) {
@@ -295,7 +280,6 @@ class WopClientVerifyTest {
 
     @Test
     void digestNotInSignedHeadersRejected() {
-        // I1 负向量：digest 头存在但未入签 → body 退回无保护，必须拒
         byte[] body = Codec.utf8("{}");
         PlatformResponse resp = RSA_RIG.respond("/p", body, false);
         reSignWith(resp.headers(), "/p", Arrays.asList("x-wop-nonce", "x-wop-timestamp"));
@@ -431,9 +415,6 @@ class WopClientVerifyTest {
                 sm2Client.verifyCallback(resp.headers(), resp.wire(), "/cb").reason());
     }
 
-    /** I7 韧性：验签策略内部抛 RuntimeException（而非返回 false）时不得外泄异常，须模糊化为 SIGNATURE_FAILED。
-     *  注入：合法构建后反射替换 platformPublicKey 为 RSA 公钥，SM2 曲线守卫（toPublicParams）抛
-     *  IllegalArgumentException → 策略包装 CryptoException → verifyInbound catch。 */
     @Test
     void signatureStrategyRuntimeExceptionFailsVaguely() throws Exception {
         String sm2Priv = TestVectors.keys("sm2").path("privateDB64").asText();
@@ -459,7 +440,6 @@ class WopClientVerifyTest {
         signedNames.forEach(n -> sub.put(n, headers.get(n)));
         String canonical = CanonicalRequest.build("v1/1800", "POST", path, "",
                 CanonicalRequest.canonicalHeaders(sub));
-        // spec:D14：平台侧重签 userId 与装配一致
         byte[] sig = RSA.signature().sign(Codec.utf8(canonical), platformPriv, Codec.utf8("1234567812345678"));
         headers.put("x-wop-sign", SignHeader.build("WOP-RSA3072-SHA256", 1800, signedNames,
                 Codec.b64UrlEncode(sig)));

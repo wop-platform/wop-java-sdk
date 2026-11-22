@@ -29,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** config-spec 补齐：K15/K26、C4 方向性凭证、§6.4 默认上下文缓存。 */
 class WopClientConfigSpecTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -136,12 +135,12 @@ class WopClientConfigSpecTest {
                 worker = pool.submit(() -> {
                     workerThread.set(Thread.currentThread());
                     submitted.countDown();
-                    return WopClient.defaultClient(); // 快路径读到 null，阻塞在锁入口
+                    return WopClient.defaultClient();
                 });
                 assertTrue(submitted.await(5, TimeUnit.SECONDS));
                 awaitThreadState(workerThread.get(), Thread.State.BLOCKED);
-                instanceField.set(null, holder); // 模拟"他人持锁期间已完成初始化"
-            } // 释放锁：worker 进入二次检查，instance 已非空 → 复用 holder
+                instanceField.set(null, holder);
+            }
             assertSame(holder, worker.get(5, TimeUnit.SECONDS));
         } finally {
             pool.shutdownNow();
