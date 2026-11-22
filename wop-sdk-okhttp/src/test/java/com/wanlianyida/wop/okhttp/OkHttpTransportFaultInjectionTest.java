@@ -19,6 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 故障注入（OkHttp 适配器网络层）：超时/断连/TLS 错配/5xx 透传/头名规范化。
+ */
 class OkHttpTransportFaultInjectionTest {
 
     /** Java 8 无 Map.of：成对参数构造小请求头。 */
@@ -37,6 +40,7 @@ class OkHttpTransportFaultInjectionTest {
         server.shutdown();
     }
 
+    /** 不可路由地址 + 短连接超时 → 确定性 ConnectTimeout。 */
     private static OkHttpTransport unroutableClient() {
         OkHttpClient fast = new OkHttpClient.Builder()
                 .connectTimeout(200, TimeUnit.MILLISECONDS)
@@ -73,6 +77,7 @@ class OkHttpTransportFaultInjectionTest {
 
     @Test
     void midBodyDisconnectWrapped() throws Exception {
+        // 故障：响应体传输中断连
         server.enqueue(new MockResponse().setBody("partial").setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY));
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
@@ -82,6 +87,8 @@ class OkHttpTransportFaultInjectionTest {
 
     @Test
     void tlsMismatchSurfacesAsSdkException() throws Exception {
+        // 故障：https 指向明文端口（不 speak TLS 的对端）→ SSL/EOF 异常包装为明确异常；
+        // 关闭静默重试确保快速失败
         server.start();
         OkHttpClient noRetry = new OkHttpClient.Builder()
                 .retryOnConnectionFailure(false)
@@ -96,6 +103,7 @@ class OkHttpTransportFaultInjectionTest {
 
     @Test
     void serverErrorStatusPassedThroughUntouched() throws Exception {
+        // 故障：网关 502 —— 适配器只做透传，状态语义由 verify 层/商户决定
         server.enqueue(new MockResponse().setResponseCode(502).setBody("{\"code\":\"OP_GW_5001\"}"));
         server.start();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString());
@@ -118,12 +126,14 @@ class OkHttpTransportFaultInjectionTest {
         TransportResponse response = transport.send(new RequestDraft("POST", "/p",
                 headers("x-wop-request-id", "req-401"), new byte[]{1}));
         assertEquals(401, response.statusCode());
+        // 完整信封等值比对：contains 断言对畸形/截断 JSON 仍会通过
         assertEquals(envelope, new String(response.body(), java.nio.charset.StandardCharsets.UTF_8));
         assertEquals("req-401", server.takeRequest().getHeader("x-wop-request-id"));
     }
 
     @Test
     void responseHeaderNamesNormalizedToLowercase() throws Exception {
+        // 契约：适配器送入 verify 层的头名恒小写存储；TransportResponse 为大小写不敏感视图
         server.enqueue(new MockResponse().setResponseCode(200)
                 .addHeader("X-WOP-Sign", "WOP-RSA3072-SHA256 v1/1800/a/b")
                 .addHeader("X-Wop-Nonce", "N1"));
@@ -133,6 +143,7 @@ class OkHttpTransportFaultInjectionTest {
                 new RequestDraft("POST", "/p", headers(), new byte[]{1}));
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("x-wop-sign"));
         assertEquals("N1", response.headers().get("x-wop-nonce"));
+        // 大小写不敏感视图：任意形态查询命中同一值
         assertEquals("WOP-RSA3072-SHA256 v1/1800/a/b", response.headers().get("X-WOP-SIGN"));
         assertTrue(response.headers().keySet().stream().allMatch(k -> k.equals(k.toLowerCase())));
     }

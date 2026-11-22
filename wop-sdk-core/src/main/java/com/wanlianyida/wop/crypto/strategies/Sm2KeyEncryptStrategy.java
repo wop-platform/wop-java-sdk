@@ -10,6 +10,12 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 
+/**
+ * 国密密钥加密策略：SM2 公钥加密。
+ * <p>
+ * 线上密文 = <b>C1C3C2 裸拼接</b>（新国标 GM/T 0003，D9）：C1 = 未压缩点 04‖X‖Y 65B，
+ * C3 = SM3(x2‖M‖y2) 32B，C2 = 密文；整体变长。旧国标 C1C2C3 顺序密文解密必然失败（黄金负向量钉死）。
+ */
 public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
 
     public static final Sm2KeyEncryptStrategy INSTANCE = new Sm2KeyEncryptStrategy();
@@ -18,6 +24,7 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    /** 无状态单例，私有构造。 */
     private Sm2KeyEncryptStrategy() {
     }
 
@@ -53,6 +60,7 @@ public final class Sm2KeyEncryptStrategy implements KeyEncryptStrategy {
         }
     }
 
+    /** 线上算法名 SM2。 */
     @Override
     public String algorithmName() {
         return ALGORITHM;

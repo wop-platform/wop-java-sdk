@@ -22,6 +22,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * WopSdkConfigLoader 装载矩阵（§4）：显式路径校验、classpath 读取失败与多轮读缓冲、
+ * 发现链候选与全 miss 消息、显式不可读 fail-fast、按位置缓存。
+ */
 class WopSdkConfigLoaderEdgeTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();

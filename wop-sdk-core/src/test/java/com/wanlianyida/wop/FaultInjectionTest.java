@@ -27,6 +27,10 @@ import java.util.TreeMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 故障注入（协议层）：在"格式全部合法"的载体上注入传输/对端故障形态，
+ * 断言失败传播符合 I7（模糊类无细节）与 F6 顺序语义。
+ */
 class FaultInjectionTest {
 
     private static final String MERCHANT_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -40,6 +44,7 @@ class FaultInjectionTest {
             .merchantPrivateKey(MERCHANT_PRIV).platformPublicKey(MERCHANT_PUB)
             .build();
 
+    /** 平台响应拼装（与 WopClientVerifyTest 同构的紧凑版）。 */
     private Map<String, String> platformResponse(String path, byte[] plain, boolean l2,
                                                  java.util.function.BiFunction<byte[], String, byte[]> wireMutator) {
         try {
@@ -60,6 +65,7 @@ class FaultInjectionTest {
                 headers.put("x-wop-encrypt", EncryptHeader.buildL2(Codec.b64UrlEncode(
                         RSA.keyEncrypt().encrypt(Codec.utf8(payload), merchantPub))));
             }
+            // 故障注入点：对 wire 做变异（如截断），再按变异后的 wire 计算 digest（保证签名/摘要层通过）
             if (wireMutator != null) {
                 wire = wireMutator.apply(wire, path);
             }
@@ -76,7 +82,7 @@ class FaultInjectionTest {
                     Codec.b64UrlEncode(RSA.signature().sign(Codec.utf8(canonical), platformPriv,
                             Codec.utf8("1234567812345678")))));
 
-            headers.put("__wire__", Codec.b64UrlEncode(wire));
+            headers.put("__wire__", Codec.b64UrlEncode(wire));   // 回传构造出的 wire 给测试
             return headers;
         } catch (Exception e) {
             throw new IllegalStateException(e);
@@ -96,11 +102,12 @@ class FaultInjectionTest {
         byte[] wire = wireOf(headers);
         VerifyResult result = client.verifyResponse(headers, wire, "/p");
         assertEquals(VerifyResult.Reason.DECRYPT_FAILED, result.reason());
-        assertEquals("解密失败", result.message());
+        assertEquals("解密失败", result.message());   // tag 不匹配细节不泄露
     }
 
     @Test
     void truncatedEnvelopeFailsExplicitly() {
+        // 故障：传输截断砍掉信封 JSON 闭括号——结构层损伤属公开可判定 → 解析类明确拒绝
         Map<String, String> headers = platformResponse("/p", Codec.utf8("payload"), true,
                 (wire, p) -> Arrays.copyOf(wire, wire.length - 1));
         byte[] wire = wireOf(headers);
@@ -114,7 +121,7 @@ class FaultInjectionTest {
         for (int i = start; i < wire.length - 2; i++) {
             char c = (char) wire[i];
             if (c == '"') {
-                break;
+                break;   // 到达密文段结尾
             }
             if (c >= 'A' && c < 'Z') {
                 wire[i] = (byte) (c + 1);
@@ -163,6 +170,8 @@ class FaultInjectionTest {
 
     @Test
     void crossSuiteDeclaredInResponseFailsExplicitly() {
+        // 故障：对端声明 SM2 套件但本客户端配置为 RSA——声明与配置均为公开结构知识，
+        // 协议类明确拒绝（interop 合同 n11），不进入密钥参与的模糊验签
         byte[] body = Codec.utf8("{}");
         Map<String, String> headers = platformResponse("/p", body, false, null);
         wireOf(headers);
@@ -176,6 +185,7 @@ class FaultInjectionTest {
 
     @Test
     void pathReplayAcrossEndpointsFails() {
+        // 故障：签名覆盖 /gateway/pay，攻击者把同一响应重放到 /gateway/refund——URI 入签防跨端点重放
         byte[] body = Codec.utf8("{\"ok\":true}");
         Map<String, String> headers = platformResponse("/gateway/pay", body, false, null);
         wireOf(headers);
@@ -203,6 +213,7 @@ class FaultInjectionTest {
 
     @Test
     void mixedCaseInboundHeaderNamesTolerated() {
+        // 故障形态：非官方适配器送来大小写混合头名——core 层大小写不敏感兜底
         byte[] body = Codec.utf8("{}");
         Map<String, String> headers = platformResponse("/p", body, false, null);
         wireOf(headers);

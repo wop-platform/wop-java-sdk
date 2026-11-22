@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+/** 不可变配置快照（与 JSON camelCase 字段一一对应，§3）。 */
 public final class WopSdkConfig {
 
     private final String appKey;
@@ -66,10 +67,12 @@ public final class WopSdkConfig {
         return httpClient;
     }
 
+    /** 可选注入传输；缺省时 execute 走 SPI 发现（K11）。 */
     public Transport transport() {
         return transport;
     }
 
+    /** K16：日志/toString 凭证打码。 */
     public String toMaskedString() {
         return "WopSdkConfig[appKey=" + appKey + ", suite=" + suite
                 + ", merchantPrivateKey=****, platformPublicKey=****, serverRoot=" + serverRoot
@@ -108,6 +111,7 @@ public final class WopSdkConfig {
                 backupServerRoots, expiredSeconds, httpClient, transport);
     }
 
+    /** 程序化构造（K11），build() 执行与 JSON 路径等价的 §3.4 校验。 */
     public static final class Builder {
 
         private String appKey;

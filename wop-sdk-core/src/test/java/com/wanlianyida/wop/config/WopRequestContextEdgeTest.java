@@ -16,6 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * WopRequestContext resolve/resolveInboundOnly 合并语义：逐字段覆盖、退化 global 报错、
+ * 候选去重、transport 级 options 剥离。
+ */
 class WopRequestContextEdgeTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -158,8 +162,10 @@ class WopRequestContextEdgeTest {
         assertEquals(Arrays.asList(PRIMARY, BACKUP), ctx.failoverCandidates());
         assertEquals(TransportCall.of(PRIMARY, 10000, 30000), ctx.toTransportCall());
         assertEquals("app_001", ctx.outbound().appKey());
+        // null options 走 none() 分支
         WopRequestContext nullCtx = WopRequestContext.resolveInboundOnly(validGlobal(), null);
         assertEquals(Arrays.asList(PRIMARY, BACKUP), nullCtx.failoverCandidates());
+        // 显式 none() 与 null 同走空分支
         WopRequestContext noneCtx = WopRequestContext.resolveInboundOnly(validGlobal(), WopRequestOptions.none());
         assertEquals(Arrays.asList(PRIMARY, BACKUP), noneCtx.failoverCandidates());
     }

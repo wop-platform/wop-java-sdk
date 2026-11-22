@@ -6,6 +6,7 @@ public final class TestText {
     private TestText() {
     }
 
+    /** 等价 String.repeat(n)：n ≤ 0 返回空串。 */
     public static String repeat(String s, int n) {
         StringBuilder sb = new StringBuilder(s.length() * Math.max(n, 0));
         for (int i = 0; i < n; i++) {

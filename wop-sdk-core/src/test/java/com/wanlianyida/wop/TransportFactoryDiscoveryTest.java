@@ -16,6 +16,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * TransportFactory SPI 发现三态（config-spec §2.2/K18，§13.1 测试点 1）：
+ * 恰一即用、零/多 fail-fast、注册项损坏包装为 {@code WopError.configuration}。
+ * <p>
+ * core 测试 classpath 经 META-INF/services 恰注册一个测试 factory（alpha）构造「恰一」态；
+ * 「零」态用 parent=null 的隔离 URLClassLoader（仅 core 类目录，无注册文件）；
+ * 「多」态与损坏态用临时 services 目录叠加测试 classpath（同名注册由 ServiceLoader 去重）。
+ */
 class TransportFactoryDiscoveryTest {
 
     @Test
@@ -29,6 +37,7 @@ class TransportFactoryDiscoveryTest {
 
     @Test
     void noArgDiscoverUsesContextClassLoader() {
+        // Surefire TCCL = 测试 classpath → 同样命中唯一注册项
         assertEquals("alpha", TransportFactory.discover().name());
     }
 
@@ -46,6 +55,7 @@ class TransportFactoryDiscoveryTest {
 
     @Test
     void emptyTcclFallsBackToDefiningLoader(@TempDir Path tempDir) throws IOException {
+        // 回归（PR#35 评审）：TCCL 非空但服务目录为空（看不到 SPI 注册）→ 回退定义类加载器仍可发现
         try (URLClassLoader emptyTccl = new URLClassLoader(new URL[]{tempDir.toUri().toURL()}, null)) {
             Thread current = Thread.currentThread();
             ClassLoader original = current.getContextClassLoader();
@@ -116,6 +126,7 @@ class TransportFactoryDiscoveryTest {
 
     @Test
     void blankWopTransportPropertyTreatedAsUnset() {
+        // 全空白 wop.transport 视为未设置（§2.2）：不进入显式匹配，回落恰一即用规则 → alpha
         String previous = System.getProperty(TransportFactory.TRANSPORT_PROPERTY);
         System.setProperty(TransportFactory.TRANSPORT_PROPERTY, "   ");
         try {
@@ -170,6 +181,8 @@ class TransportFactoryDiscoveryTest {
 
     @Test
     void brokenRegistrationWrappedAsConfiguration(@TempDir Path tempDir) throws IOException {
+        // 损坏态：注册项指向不存在的类，ServiceConfigurationError 必须包装为
+        // WopError.configuration（含 cause），不让 JDK 原生错误越过 SPI 边界
         writeServices(tempDir, "com.example.NoSuchFactory\n");
         try (URLClassLoader broken = new URLClassLoader(new URL[]{tempDir.toUri().toURL()}, null)) {
             WopError ex = assertThrows(WopError.class, () -> TransportFactory.discover(broken));

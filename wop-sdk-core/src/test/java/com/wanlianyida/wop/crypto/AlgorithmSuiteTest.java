@@ -15,6 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * F1 套件配置与解析：四 RSA/SM2 套件全支持，跨族/非法拒绝（crypto spec §2）。
+ */
 class AlgorithmSuiteTest {
 
     @Test
@@ -81,6 +84,7 @@ class AlgorithmSuiteTest {
         assertEquals(12, AlgorithmSuite.parse("WOP-SM2-SM3").messageEncrypt().ivLength());
     }
 
+    // ==================== 解析类拒绝（明确指出格式错误） ====================
 
     @Test
     void rejectsBlank() {
@@ -98,6 +102,7 @@ class AlgorithmSuiteTest {
         assertThrows(WopSuiteException.class, () -> AlgorithmSuite.parse("WOP--SHA256"));
     }
 
+    // ==================== 支持类拒绝（不支持的算法组合） ====================
 
     @Test
     void rejectsUnsupportedAlgorithms() {
@@ -129,6 +134,7 @@ class AlgorithmSuiteTest {
 
     @Test
     void rejectsCrossFamilyCombination() {
+        // I5：国际密钥 + 国密摘要 / 国密密钥 + 国际摘要，禁止
         WopSuiteException e1 = assertThrows(WopSuiteException.class,
                 () -> AlgorithmSuite.parse("WOP-RSA3072-SM3"));
         WopSuiteException e2 = assertThrows(WopSuiteException.class,

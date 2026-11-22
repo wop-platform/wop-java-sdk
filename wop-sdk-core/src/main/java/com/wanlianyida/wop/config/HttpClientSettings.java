@@ -2,6 +2,7 @@ package com.wanlianyida.wop.config;
 
 import java.util.Objects;
 
+/** HTTP 客户端全局参数（毫秒/次数，§3.3 httpClient）。 */
 public final class HttpClientSettings {
 
     public static final int DEFAULT_CONNECT_TIMEOUT = 10_000;
@@ -18,6 +19,7 @@ public final class HttpClientSettings {
         this.maxRetryCount = maxRetryCount;
     }
 
+    /** 默认超时与重试上限。 */
     public static HttpClientSettings defaults() {
         return new HttpClientSettings(DEFAULT_CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT, DEFAULT_MAX_RETRY_COUNT);
     }

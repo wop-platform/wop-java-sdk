@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+/** TransportCall 值语义（USE_DEFAULT 哨兵、empty/of、equals 三字段矩阵）。 */
 class TransportCallTest {
 
     @Test
@@ -35,6 +36,7 @@ class TransportCallTest {
         assertNotEquals(base, TransportCall.of("https://other.example.com/gateway", 1500, 2500));
         assertNotEquals(base, TransportCall.of("https://gw.example.com/gateway", 1, 2500));
         assertNotEquals(base, TransportCall.of("https://gw.example.com/gateway", 1500, 1));
+        // empty() 与值等的 of(null, -1, -1) 语义一致
         assertEquals(TransportCall.empty(),
                 TransportCall.of(null, TransportCall.USE_DEFAULT, TransportCall.USE_DEFAULT));
     }

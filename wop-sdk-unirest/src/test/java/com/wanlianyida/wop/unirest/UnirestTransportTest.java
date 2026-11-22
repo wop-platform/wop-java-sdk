@@ -22,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Unirest 适配器：MockWebServer 覆盖请求映射/响应映射/错误传播。
+ */
 class UnirestTransportTest {
 
     /** Java 8 无 Map.of：成对参数构造小请求头。 */
@@ -66,7 +69,9 @@ class UnirestTransportTest {
         assertEquals("POST", recorded.getMethod());
         assertEquals("/gateway/x", recorded.getPath());
         assertEquals("app_001", recorded.getHeader("x-wop-appkey"));
+        // draft 未带 content-type → 适配器补 application/octet-stream（与 OkHttp 适配器 body 媒体类型约定一致）
         assertEquals("application/octet-stream", recorded.getHeader("content-type"));
+        // 未协商 gzip（requestCompression 已关），与 jdkhttp 适配器一致
         assertNull(recorded.getHeader("accept-encoding"));
         assertArrayEquals(body, recorded.getBody().readByteArray());
     }
@@ -134,6 +139,7 @@ class UnirestTransportTest {
 
     @Test
     void ioFailureWrappedAsSdkException() throws Exception {
+        // 本地保留端口抢占后立即释放 → 连接拒收（全本地确定性，不受系统代理影响）
         int port;
         try (ServerSocket socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
@@ -159,12 +165,14 @@ class UnirestTransportTest {
     void defaultConstructorTrailingSlashBaseUrlAndRelativePath() throws Exception {
         enqueue(200, "x");
         server.start();
+        // 尾斜杠 baseUrl + 无斜杠相对 path
         UnirestTransport trailing = new UnirestTransport(server.url("/sub/").toString());
         TransportResponse response = trailing.send(
                 new RequestDraft("POST", "gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals("/sub/gateway/x", server.takeRequest().getPath());
 
+        // 无参构造（无 baseUrl）+ 相对 path → 明确拒绝
         UnirestTransport noArg = new UnirestTransport();
         assertThrows(WopSdkException.class, () -> noArg.send(
                 new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
@@ -177,6 +185,7 @@ class UnirestTransportTest {
                 new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
     }
 
+    // spec:max-response-bytes —— 11MB 上限边界：超 1 字节拒 / 恰好上限过（流式计数，读取过程中生效）
 
     @Test
     void oversizedBodyRejectedWhileStreaming() throws Exception {
@@ -219,6 +228,7 @@ class UnirestTransportTest {
 
     @Test
     void chunkedResponseSkipsLengthCheck() throws Exception {
+        // chunked 响应无 Content-Length 头 → 跳过截断校验，原样交付
         server.enqueue(new MockResponse().setResponseCode(200)
                 .setChunkedBody(new okio.Buffer().writeUtf8("chunked-body"), 4));
         server.start();
@@ -229,6 +239,7 @@ class UnirestTransportTest {
         assertEquals("chunked-body", new String(response.body(), StandardCharsets.UTF_8));
     }
 
+    // send(draft, TransportCall) 覆盖路径（§7.1）：K9 connect 覆盖拒绝 / read 级 requestTimeout / null call
 
     @Test
     void perCallConnectTimeoutOverrideRejected() throws IOException {
@@ -246,13 +257,16 @@ class UnirestTransportTest {
         enqueue(200, "b");
         enqueue(200, "c");
         server.start();
+        // baseUrl 指向不可达地址：serverRoot 覆盖 + read 级 requestTimeout 生效才能拿到 200
         UnirestTransport transport = new UnirestTransport("http://invalid.example");
         assertEquals(200, transport.send(
                 new RequestDraft("POST", "/gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}),
                 TransportCall.of(server.url("/").toString(), TransportCall.USE_DEFAULT, 2500)).statusCode());
+        // 空串 serverRoot 视为未设置 → 走绝对 URL
         assertEquals(200, transport.send(
                 new RequestDraft("POST", server.url("/gw").toString(), headers(), new byte[]{1}),
                 TransportCall.of("", TransportCall.USE_DEFAULT, 2500)).statusCode());
+        // null call：两处请求级覆盖均跳过
         assertEquals(200, transport.send(
                 new RequestDraft("POST", server.url("/gw").toString(), headers(), new byte[]{1}), null).statusCode());
         assertEquals("/gateway/x", server.takeRequest().getPath());

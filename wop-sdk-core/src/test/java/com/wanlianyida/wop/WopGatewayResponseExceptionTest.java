@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** WopGatewayResponseException 状态快照、消息与双向防御拷贝。 */
 class WopGatewayResponseExceptionTest {
 
     @Test

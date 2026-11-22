@@ -31,12 +31,18 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * WopClient.buildRequest 出向：L0/L2 信封、I1 digest 入签、D2 缺席语义、
+ * F9 nonce/timestamp、确定性（注入 clock/nonce 后字节可重放）。
+ * §2.2：配置类失败（Builder/buildRequest）归类 configuration（肯定式断言 category）。
+ */
 class WopClientBuildRequestTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
     private static final String RSA_PUB = TestVectors.keys("rsa3072").path("publicSpkiB64").asText();
     private static final String RSA4096_PUB = TestVectors.keys("rsa4096").path("publicSpkiB64").asText();
 
+    /** 固定 clock/nonce 的测试客户端（可重放生成断言）。 */
     private static WopClient fixedClient(Supplier<String> nonce) {
         LongSupplier clock = () -> 1_758_900_000_000L;
         return testClient("WOP-RSA3072-SHA256", nonce, clock);
@@ -56,6 +62,7 @@ class WopClientBuildRequestTest {
                 RSA_PRIV, RSA_PUB, 1800), clock, nonce);
     }
 
+    /** 带 sdkConfig 的客户端（支持 WopRequestOptions）；使用无传输的 stub transport。 */
     private static WopClient fromConfigClient() {
         WopSdkConfig cfg = new WopSdkConfig.Builder()
                 .appKey("app_001")
@@ -74,14 +81,17 @@ class WopClientBuildRequestTest {
 
     @Test
     void builderRequiresMandatoryFields() {
+        // appKey / suite / 双钥缺一不可，fail-fast 于 build()（category=configuration）
         assertThrows(WopError.class, () -> WopClient.builder().build());
         assertThrows(WopError.class, () -> WopClient.builder().appKey("a").build());
         assertThrows(WopError.class, () -> WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256").build());
         WopClient.Builder partial = WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(RSA_PRIV);
         assertThrows(WopError.class, partial::build);
+        // 非法套件
         assertThrows(WopError.class, () -> WopClient.builder().appKey("a")
                 .suite("WOP-RSA3072-SM3").merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB).build());
+        // 密钥与套件长度不符
         assertThrows(WopError.class, () -> WopClient.builder().appKey("a")
                 .suite("WOP-RSA4096-SHA256").merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB).build());
         assertThrows(WopError.class, () -> WopClient.builder().appKey("a")
@@ -99,6 +109,7 @@ class WopClientBuildRequestTest {
     void l0GetWithoutBodyOmitsDigest() {
         WopClient client = fixedClient(NONCE);
         RequestDraft draft = client.buildRequest("GET", "/gateway/order/get", null, SecurityLevel.L0);
+        // D2：无 body → digest 头缺席
         assertNull(draft.headers().get("x-wop-content-digest"));
         assertNull(draft.headers().get("x-wop-encrypt"));
         assertNull(draft.wireBody());
@@ -121,6 +132,7 @@ class WopClientBuildRequestTest {
         byte[] body = Codec.utf8("{\"orderId\":\"W1\"}");
         RequestDraft draft = client.buildRequest("POST", "/gateway/order/create", body, SecurityLevel.L0);
 
+        // D2/I1：digest 存在、入签、等于 SHA-256(wire body)
         String digest = draft.headers().get("x-wop-content-digest");
         String expected = "sha-256 " + Codec.hexLower(
                 AlgorithmSuite.parse("WOP-RSA3072-SHA256").digest().digest(body));
@@ -129,9 +141,11 @@ class WopClientBuildRequestTest {
         assertTrue(sign.signedHeaders().contains("x-wop-content-digest"));
         assertArrayEquals(body, draft.wireBody());
 
+        // 签名可用商户公钥验证（网关侧行为）：重建 canonical
         assertTrue(signatureVerifies(draft, sign, RSA_PUB));
     }
 
+    /** ISV D-13：子商户身份头存在即必须入签（网关 SignFilter 同形规则）。 */
     @Test
     void subMchIdHeaderSignedL0WithBody() {
         WopClient client = fixedClient(NONCE);
@@ -154,6 +168,7 @@ class WopClientBuildRequestTest {
                 WopRequestOptions.builder().subMchId("PLF-SUB-001").build());
 
         SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
+        // 无 body → 无 digest；子商户头仍入签
         assertEquals(java.util.Arrays.asList("x-wop-appkey", "x-wop-nonce",
                 "x-wop-sub-mch-id", "x-wop-timestamp"), sign.signedHeaders());
         assertTrue(signatureVerifies(draft, sign, RSA_PUB));
@@ -178,6 +193,7 @@ class WopClientBuildRequestTest {
                 WopRequestOptions.builder().subMchId("PLF-SUB-001").requestId("req-042").build());
 
         SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
+        // 附录 J/J1 与附录 I/I1 语义相反：身份头入签、透传头不入签
         assertTrue(sign.signedHeaders().contains("x-wop-sub-mch-id"));
         assertFalse(sign.signedHeaders().contains("x-wop-request-id"));
         assertEquals("req-042", draft.headers().get("x-wop-request-id"));
@@ -189,6 +205,7 @@ class WopClientBuildRequestTest {
         WopClient client = fixedClient(NONCE, () -> "fixedreq000000000000000000000001");
         byte[] body = Codec.utf8("{\"k\":1}");
         RequestDraft plain = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0);
+        // 空白 → 视为未设置，头与签名逐字节同存量行为（AC-20）
         RequestDraft blank = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0,
                 WopRequestOptions.builder().subMchId("   ").build());
         assertEquals(plain.headers(), blank.headers());
@@ -210,6 +227,7 @@ class WopClientBuildRequestTest {
         assertTrue(wire.startsWith("{\"encrypted\":\"") && wire.endsWith("\"}"), wire);
         byte[] cipherB64u = Codec.utf8(wire.substring(14, wire.length() - 2));
 
+        // digest 对密文载体（D2：摘要对象 = 线上原始报文字节）
         String digest = draft.headers().get("x-wop-content-digest");
         assertEquals("sha-256 " + Codec.hexLower(
                 AlgorithmSuite.parse("WOP-RSA3072-SHA256").digest().digest(draft.wireBody())), digest);
@@ -222,6 +240,7 @@ class WopClientBuildRequestTest {
         // AC-20 零回归：未传 subMchId 时该头缺席
         assertNull(draft.headers().get("x-wop-sub-mch-id"));
 
+        // 平台私钥解包 DEK → AES-256-GCM → 解密 wire 得原文（请求方向角色对调自证）
         com.wanlianyida.wop.crypto.EncryptHeader.Parsed parsed = EncryptHeader.parse(encryptHeader);
         PrivateKey platformPriv = com.wanlianyida.wop.crypto.KeyCodec.parsePrivateKey(
                 TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(),
@@ -250,6 +269,7 @@ class WopClientBuildRequestTest {
 
         String encryptHeader = draft.headers().get("x-wop-encrypt");
         com.wanlianyida.wop.crypto.EncryptHeader.Parsed parsed = EncryptHeader.parse(encryptHeader);
+        // 平台私钥（同对密钥自证）解包 C1C3C2 → SM4-GCM dek
         PrivateKey priv = com.wanlianyida.wop.crypto.KeyCodec.parsePrivateKey(
                 TestVectors.keys("sm2").path("privateDB64").asText(), AlgorithmSuite.parse("WOP-SM2-SM3"));
         byte[] dekPlain = AlgorithmSuite.parse("WOP-SM2-SM3").keyEncrypt()
@@ -257,11 +277,14 @@ class WopClientBuildRequestTest {
         DekPayload dek = DekPayload.decode(new String(dekPlain, StandardCharsets.UTF_8));
         assertEquals("SM4-GCM", dek.alg());
         assertEquals(16, dek.key().length);
+        // digest 标签 sm3
         assertTrue(draft.headers().get("x-wop-content-digest").startsWith("sm3 "));
+        // 解密回原文
         String wire = new String(draft.wireBody(), StandardCharsets.UTF_8);
         byte[] cipher = Codec.b64UrlDecode(wire.substring(14, wire.length() - 2));
         assertArrayEquals(body, AlgorithmSuite.parse("WOP-SM2-SM3").messageEncrypt()
                 .decrypt(cipher, dek.iv(), dek.key()));
+        // 签名验证（SM2，86 字符 b64url）
         SignHeader.Parsed sign = SignHeader.parse(draft.headers().get("x-wop-sign"));
         assertEquals(86, sign.signature().length());
         PublicKey merchantPub = com.wanlianyida.wop.crypto.KeyCodec.parsePublicKey(
@@ -271,6 +294,8 @@ class WopClientBuildRequestTest {
 
     @Test
     void deterministicReplayWithFixedClockAndNonce() {
+        // spec §2：同输入同输出（除 CSPRNG IV/nonce——附录 I/I3 将缺省 requestId 同列豁免）。
+        // 注入固定 requestIdGen 后 L0 全头字节级一致（注入契约本身即被测断言）
         WopClient client = fixedClient(NONCE, () -> "fixedreq000000000000000000000001");
         byte[] body = Codec.utf8("{\"k\":1}");
         RequestDraft a = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L0);
@@ -279,6 +304,7 @@ class WopClientBuildRequestTest {
         assertArrayEquals(a.wireBody(), b.wireBody());
         assertEquals("fixedreq000000000000000000000001", a.headers().get("x-wop-request-id"));
 
+        // L2：DEK/IV 为 CSPRNG，headers 除 digest/encrypt 外一致
         RequestDraft c = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L2);
         RequestDraft d = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L2);
         assertEquals(c.headers().get("x-wop-appkey"), d.headers().get("x-wop-appkey"));
@@ -296,6 +322,7 @@ class WopClientBuildRequestTest {
         assertEquals(32, a.headers().get("x-wop-nonce").length());
         assertTrue(a.headers().get("x-wop-nonce").matches("[0-9a-f]{32}"));
         assertNotEquals(a.headers().get("x-wop-nonce"), b.headers().get("x-wop-nonce"));
+        // 时间戳为 13 位毫秒
         assertTrue(a.headers().get("x-wop-timestamp").matches("\\d{13}"));
     }
 
@@ -304,9 +331,10 @@ class WopClientBuildRequestTest {
         WopClient client = fixedClient(NONCE);
         byte[] body = Codec.utf8("{}");
         WopError e1 = assertThrows(WopError.class, () -> client.buildRequest(" ", "/p", body, SecurityLevel.L0));
-        assertEquals(WopError.Category.configuration, e1.category());
+        assertEquals(WopError.Category.configuration, e1.category());   // spec:2.2
         assertThrows(WopError.class, () -> client.buildRequest("POST", " ", body, SecurityLevel.L0));
         assertThrows(WopError.class, () -> client.buildRequest("POST", "/p", body, null));
+        // L2 需要非空 body
         assertThrows(WopError.class, () -> client.buildRequest("POST", "/p", null, SecurityLevel.L2));
         assertThrows(WopError.class, () -> client.buildRequest("POST", "/p", new byte[0], SecurityLevel.L2));
     }
@@ -338,6 +366,7 @@ class WopClientBuildRequestTest {
         assertTrue(!sign.signedHeaders().contains("x-wop-request-id"));
         assertTrue(signatureVerifies(draft, sign, RSA_PUB));
 
+        // L2：透传头同样不入签，签名仍可自证
         RequestDraft l2 = client.buildRequest("POST", "/gateway/x", body, SecurityLevel.L2,
                 WopRequestOptions.builder().requestId("req-002").build());
         assertEquals("req-002", l2.headers().get("x-wop-request-id"));
@@ -348,6 +377,7 @@ class WopClientBuildRequestTest {
 
     @Test
     void requestIdDefaultsToGeneratedUuidAndTrimsExplicitValue() {
+        // 附录 I/I3：商户未传（null/空白）→ 缺省生成 UUID 去连字符（小写 32 hex），头恒存在
         WopClient client = fixedClient(NONCE);
         String generated = client.buildRequest("GET", "/p", null, SecurityLevel.L0)
                 .headers().get("x-wop-request-id");
@@ -358,6 +388,7 @@ class WopClientBuildRequestTest {
                 .headers().get("x-wop-request-id");
         assertTrue(generatedFromBlank.matches("[0-9a-f]{32}"));
         assertNotEquals(generated, generatedFromBlank);
+        // 显式传值 → trim 后原值上行（禁止二次改写）
         assertEquals("req-001", client.buildRequest("GET", "/p", null, SecurityLevel.L0,
                 WopRequestOptions.builder().requestId("  req-001  ").build())
                 .headers().get("x-wop-request-id"));
@@ -365,6 +396,7 @@ class WopClientBuildRequestTest {
 
     @Test
     void outboundLogContainsFinalRequestIdValue() {
+        // 附录 I/I3 日志义务：出向构造点 INFO 日志必须含最终头值（供网关 AccessLog 关联排查）
         java.util.logging.Logger log = java.util.logging.Logger.getLogger(WopClient.class.getName());
         java.util.List<String> lines = new java.util.ArrayList<>();
         java.util.logging.Handler capture = new java.util.logging.Handler() {
@@ -404,12 +436,14 @@ class WopClientBuildRequestTest {
 
     @Test
     void requestIdLengthLimit() {
+        // 128 chars OK
         WopClient client = fixedClient(NONCE);
         String len128 = repeat('a', 128);
         RequestDraft ok = client.buildRequest("GET", "/p", null, SecurityLevel.L0,
                 WopRequestOptions.builder().requestId(len128).build());
         assertEquals(len128, ok.headers().get("x-wop-request-id"));
 
+        // 129 chars → build 阶段抛异常
         assertThrows(WopError.class,
                 () -> WopRequestOptions.builder().requestId(repeat('a', 129)).build());
     }
@@ -422,6 +456,7 @@ class WopClientBuildRequestTest {
 
     @Test
     void requestIdOnlyDoesNotRequireSdkConfig() {
+        // 仅 requestId 的选项走无配置覆盖路径，不需要 fromConfig client
         WopClient builderClient = WopClient.builder()
                 .appKey("app_001").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB).build();
@@ -431,6 +466,8 @@ class WopClientBuildRequestTest {
         assertEquals("req-only", draft.headers().get("x-wop-request-id"));
     }
 
+    /** 网关侧等价验证：按 signedHeaders 从 draft.headers 重建 canonical 并用商户公钥验签。
+     *  D14：验签 userId = 请求身份 appKey（出向签名 userId 同源）。 */
     static boolean signatureVerifies(RequestDraft draft, SignHeader.Parsed sign, String publicKeyB64) {
         return signatureVerifies(draft, sign, com.wanlianyida.wop.crypto.KeyCodec.parsePublicKey(
                 publicKeyB64, AlgorithmSuite.parse(sign.securityReq())));
@@ -447,6 +484,7 @@ class WopClientBuildRequestTest {
                 sign.protocolVersion() + "/" + sign.expiredSeconds(),
                 draft.method(), draft.path(), "", CanonicalRequest.canonicalHeaders(signed));
         AlgorithmSuite suite = AlgorithmSuite.parse(sign.securityReq());
+        // spec:D14：userId = x-wop-appkey（与出向签名同源）
         return suite.signature().verify(Codec.utf8(canonical),
                 Codec.b64UrlDecode(sign.signature()), publicKey,
                 Codec.utf8(draft.headers().get("x-wop-appkey")));

@@ -10,6 +10,9 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * A1 摘要正向量：黄金向量 digest 段字节级断言（SHA-256 / SM3）。
+ */
 class DigestStrategyVectorTest {
 
     @Test
@@ -19,6 +22,7 @@ class DigestStrategyVectorTest {
         assertEquals("SHA-256", strategy.algorithmName());
         byte[] hash = strategy.digest(vector.path("input").asText().getBytes(StandardCharsets.UTF_8));
         assertEquals(32, hash.length);
+        // 字节级：小写 hex 与向量一致
         assertEquals(vector.path("expectedHex").asText(), Codec.hexLower(hash));
     }
 

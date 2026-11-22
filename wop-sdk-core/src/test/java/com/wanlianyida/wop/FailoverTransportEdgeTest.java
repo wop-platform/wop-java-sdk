@@ -18,6 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * FailoverTransport 补充边界：单参 send、mergeCall 合并语义（引用判 empty 与超时保留）、
+ * 非重试异常原样上抛、isPreSendRetryable 分类。
+ */
 class FailoverTransportEdgeTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -41,6 +45,7 @@ class FailoverTransportEdgeTest {
         return new RequestDraft("POST", "/gateway/x", new LinkedHashMap<String, String>(), null);
     }
 
+    /** 记录合并后 TransportCall 的直通传输。 */
     private static final class RecordingTransport implements Transport {
         TransportCall seenCall;
 
@@ -80,6 +85,7 @@ class FailoverTransportEdgeTest {
 
     @Test
     void valueEqualToEmptyStillTakesExplicitPath() {
+        // 仅 null 走默认分支；值等 empty() 的显式 call 按字段合并，结果值等
         RecordingTransport delegate = new RecordingTransport();
         new FailoverTransport(delegate, context(3)).send(draft(),
                 TransportCall.of(null, TransportCall.USE_DEFAULT, TransportCall.USE_DEFAULT));

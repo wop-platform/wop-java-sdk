@@ -5,11 +5,13 @@ import com.wanlianyida.wop.WopError;
 import java.net.URI;
 import java.net.URISyntaxException;
 
+/** §7.7 path 语法与网关 URL 校验（K20/K23）。 */
 public final class ConfigUrlUtils {
 
     private ConfigUrlUtils() {
     }
 
+    /** K20：HTTPS 绝对 URL，拒绝 query/fragment，加载时 trim 尾部 /。 */
     public static String validateGatewayUrl(String value, String fieldName) {
         if (value == null || value.trim().isEmpty()) {
             throw WopError.configuration(fieldName + " 不是合法 URL: " + value);
@@ -46,6 +48,7 @@ public final class ConfigUrlUtils {
         return result;
     }
 
+    /** §7.7 API path 语法校验。 */
     public static void validateApiPath(String path) {
         if (path == null || path.trim().isEmpty()) {
             throw WopError.configuration("请求路径为空");
@@ -61,6 +64,7 @@ public final class ConfigUrlUtils {
         }
     }
 
+    /** §7.7 字符串拼接 serverRoot + path（K23）。 */
     public static String joinUrl(String serverRoot, String path) {
         validateApiPath(path);
         String root = serverRoot.endsWith("/") ? serverRoot.substring(0, serverRoot.length() - 1) : serverRoot;

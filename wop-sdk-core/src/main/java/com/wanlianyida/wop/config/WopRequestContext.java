@@ -21,6 +21,7 @@ import java.util.Set;
  */
 public final class WopRequestContext {
 
+    /** 出向签名/DEK 包装凭证。 */
     public static final class Outbound {
 
         private final String appKey;
@@ -59,6 +60,7 @@ public final class WopRequestContext {
         }
     }
 
+    /** 入向验签/DEK 解包凭证（SM2 ZA 仍用平台固定 userId，D15）。 */
     public static final class Inbound {
 
         private final AlgorithmSuite suite;
@@ -104,10 +106,12 @@ public final class WopRequestContext {
         this.readTimeoutMillis = readTimeoutMillis;
     }
 
+    /** verifyCallback 凭证覆盖：仅合并凭证字段，忽略 serverRoot/超时（K10）。 */
     public static WopRequestContext resolveInboundOnly(WopSdkConfig global, WopRequestOptions options) {
         return resolve(global, stripTransportFields(options));
     }
 
+    /** 出向字段（requestId/subMchId）在此被刻意丢弃：入向验签不得消费子商户身份头（sdk-spec 附录 J/J3）。 */
     private static WopRequestOptions stripTransportFields(WopRequestOptions options) {
         if (options == null || options.isEmpty()) {
             return WopRequestOptions.none();
@@ -121,6 +125,7 @@ public final class WopRequestContext {
                 .build();
     }
 
+    /** §6.3 resolve：合并 + 复校验 + 方向性视图。 */
     public static WopRequestContext resolve(WopSdkConfig global, WopRequestOptions options) {
         Objects.requireNonNull(global, "global");
         if (options == null || options.isEmpty()) {
@@ -245,6 +250,7 @@ public final class WopRequestContext {
         return TransportCall.of(serverRoot, connectTimeoutMillis, readTimeoutMillis);
     }
 
+    /** K16：日志/toString 不含明文密钥。 */
     public String toMaskedString() {
         return "WopRequestContext[primaryServerRoot=" + primaryServerRoot
                 + ", failoverCandidates=" + failoverCandidates

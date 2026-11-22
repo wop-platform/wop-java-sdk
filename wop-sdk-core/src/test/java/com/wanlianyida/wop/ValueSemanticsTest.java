@@ -9,6 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * record→class 改写后的值语义契约（equals/hashCode/toString 按全部字段）：
+ * 逐字段矩阵确保每个 Objects.equals 的 true/false 分支均被触达，维持 JaCoCo 100% 门禁。
+ * 数组字段按引用比较（record 等价语义），同值断言共用同一数组引用。
+ */
 class ValueSemanticsTest {
 
     private static RequestDraft draft() {
@@ -83,6 +88,7 @@ class ValueSemanticsTest {
                 VerifyResult.Reason.DIGEST_MISMATCH, "d"));
         assertNotEquals(base, new VerifyResult(true, plain,
                 VerifyResult.Reason.DECRYPT_FAILED, "other"));
+        // toString 用对外文案（10.2）而非枚举名；成功形态不含明文
         assertTrue(new VerifyResult(false, null,
                 VerifyResult.Reason.DECRYPT_FAILED, null).toString().contains("解密失败"));
         assertTrue(base.toString().contains("ok"));

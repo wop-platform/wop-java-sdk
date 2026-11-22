@@ -8,6 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * ConfigJsonParser 边界与错误消息全覆盖（K8/K21）：null/空/BOM、根类型、
+ * 尾随内容、未知字段全类型忽略、NaN/Infinity 拒绝、数字与转义校验、重复键硬错。
+ */
 class ConfigJsonParserEdgeTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -22,11 +26,13 @@ class ConfigJsonParserEdgeTest {
                 + ",\"serverRoot\":\"https://gw.example.com/gateway\"}";
     }
 
+    /** base 追加字段（去尾大括号、补逗号、重新闭合）。 */
     private static String withField(String extra) {
         String b = base();
         return b.substring(0, b.length() - 1) + "," + extra + "}";
     }
 
+    /** base 追加内容但不闭合（构造 EOF 场景）。 */
     private static String unterminated(String extra) {
         String b = base();
         return b.substring(0, b.length() - 1) + "," + extra;
@@ -245,6 +251,7 @@ class ConfigJsonParserEdgeTest {
 
     @Test
     void emptyObjectSurfacesFirstMissingField() {
+        // 五个必填字符串全 null → 构造器空串缺省分支 → 校验器按序报 appKey
         assertTrue(parseError("{}").getMessage().contains("缺少必填项: appKey"));
     }
 
@@ -265,8 +272,10 @@ class ConfigJsonParserEdgeTest {
 
     @Test
     void numberParsingAtEof() {
+        // 数字起点即 EOF：'-' 检查与数字循环均以 len-F 退出 → 期望数字
         assertTrue(parseError(unterminated("\"httpClient\":{\"connectTimeout\":"))
                 .getMessage().contains("期望数字"));
+        // 数字后 EOF：数字循环 len-F 退出，随后逗号检查在 EOF 报错
         assertTrue(parseError(unterminated("\"httpClient\":{\"connectTimeout\":12"))
                 .getMessage().contains("期望 ','"));
     }
@@ -282,6 +291,7 @@ class ConfigJsonParserEdgeTest {
 
     @Test
     void eofInsideSkippedLiteralTail() {
+        // 字面量扫描到 EOF：循环 len-F 退出，"tru" 非 NaN/Infinity → 逗号检查报错
         assertTrue(parseError(unterminated("\"u4\":tru")).getMessage().contains("期望 ','"));
     }
 }

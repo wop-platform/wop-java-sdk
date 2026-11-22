@@ -22,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 覆盖闭合第二批：分支组合补全。
+ */
 class CoverageClose2Test {
 
     private static final AlgorithmSuite RSA = AlgorithmSuite.parse("WOP-RSA3072-SHA256");
@@ -30,10 +33,10 @@ class CoverageClose2Test {
     @Test
     void isLowerHex64CharClassCombinations() {
         assertTrue(Codec.isLowerHex64(TestText.repeat("0123456789abcdef", 4)));
-        assertFalse(Codec.isLowerHex64(TestText.repeat(":", 64)));
-        assertFalse(Codec.isLowerHex64(TestText.repeat("/", 64)));
-        assertFalse(Codec.isLowerHex64(TestText.repeat("`", 64)));
-        assertFalse(Codec.isLowerHex64(TestText.repeat("@", 64)));
+        assertFalse(Codec.isLowerHex64(TestText.repeat(":", 64)));   // '9' 之后
+        assertFalse(Codec.isLowerHex64(TestText.repeat("/", 64)));   // '9' 与 'a' 之间
+        assertFalse(Codec.isLowerHex64(TestText.repeat("`", 64)));   // 'f' 之后
+        assertFalse(Codec.isLowerHex64(TestText.repeat("@", 64)));   // 'Z' 与 'a' 之间
     }
 
     @Test
@@ -63,6 +66,7 @@ class CoverageClose2Test {
 
     @Test
     void sm2SignWithNullUserIdRejected() {
+        // spec:D14：userId=null → 显式拒绝（无默认回退），sign/verify 双路径覆盖 withId null 分支
         byte[] msg = Codec.utf8("x");
         PrivateKey priv = KeyCodec.parsePrivateKey(
                 TestVectors.keys("sm2").path("privateDB64").asText(), SM2);
@@ -115,6 +119,7 @@ class CoverageClose2Test {
         assertEquals(VerifyResult.Reason.MISSING_SIGN_HEADER,
                 client.verifyResponse(null, Codec.utf8("x"), "/p").reason());
 
+        // 无 body 响应（GET 语义）：digest 缺席 + 完整签名 → ok
         PrivateKey platformPriv = KeyCodec.parsePrivateKey(
                 TestVectors.keys("rsa3072").path("privatePkcs8B64").asText(), RSA);
         Map<String, String> headers = new LinkedHashMap<>();
@@ -137,6 +142,7 @@ class CoverageClose2Test {
 
     @Test
     void l2UnwrappedDekPayloadMalformedExplicit() {
+        // 解包成功但载荷非 alg$key$iv → 明确拒绝（公开协议知识，密文内容无关紧要）
         com.wanlianyida.wop.WopClient client = com.wanlianyida.wop.WopClient.builder()
                 .appKey("a").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(TestVectors.keys("rsa3072").path("privatePkcs8B64").asText())

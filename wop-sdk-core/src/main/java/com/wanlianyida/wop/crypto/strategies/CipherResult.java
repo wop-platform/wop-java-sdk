@@ -2,11 +2,17 @@ package com.wanlianyida.wop.crypto.strategies;
 
 import java.util.Objects;
 
+/**
+ * 对称加密结果：密文（含 GCM tag 尾拼，F4）与 IV 同生同传。
+ * <p>
+ * 不可变值对象（record 等价语义：equals/hashCode 按全部字段，数组字段引用比较）。
+ */
 public final class CipherResult {
 
     /** 密文（含 GCM tag 尾拼）。 */
     private final byte[] cipher;
 
+    /** IV。 */
     private final byte[] iv;
 
     public CipherResult(byte[] cipher, byte[] iv) {
@@ -19,6 +25,7 @@ public final class CipherResult {
         return cipher;
     }
 
+    /** IV。 */
     public byte[] iv() {
         return iv;
     }

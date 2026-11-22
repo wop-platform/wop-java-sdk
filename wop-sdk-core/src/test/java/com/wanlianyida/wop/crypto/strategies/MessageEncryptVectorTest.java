@@ -12,6 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * A1 报文加密正向量 + A2 负向量：AES-256-GCM / SM4-GCM 固定 key/IV 字节级断言
+ * （位于 strategies 包以访问向量专用固定 IV 入口）。
+ */
 class MessageEncryptVectorTest {
 
     @Test
@@ -30,6 +34,7 @@ class MessageEncryptVectorTest {
         // 字节级：ciphertext||tag 尾拼（F4），tag 128bit
         assertEquals(plain.length + 16, expected.length);
         assertArrayEquals(expected, strategy.encryptForVector(plain, key, iv).cipher());
+        // 解密回环（同向量）
         assertArrayEquals(plain, strategy.decrypt(expected, iv, key));
     }
 
@@ -52,6 +57,7 @@ class MessageEncryptVectorTest {
 
     @Test
     void gcmTamperRejected() {
+        // A2 负向量：tag/密文篡改必须拒绝（AEAD）
         JsonNode vector = TestVectors.firstById("messageEncrypt", "aesgcm-encrypt");
         byte[] key = Codec.b64UrlDecode(vector.path("keyB64u").asText());
         byte[] iv = Codec.b64UrlDecode(vector.path("ivB64u").asText());
@@ -81,6 +87,7 @@ class MessageEncryptVectorTest {
 
     @Test
     void encryptGeneratesFreshIvEachCall() {
+        // I4 结构性断言：同一密钥下两次加密 IV 必不相同（CSPRNG，出站 IV 生成点唯一）
         byte[] key = Codec.b64UrlDecode(TestVectors.input("aesKeyB64u"));
         byte[] plain = Codec.utf8("iv uniqueness");
         CipherResult a = Aes256GcmStrategy.INSTANCE.encrypt(plain, key);
@@ -96,6 +103,7 @@ class MessageEncryptVectorTest {
 
     @Test
     void injectedRandomDrivesIvDeterministically() {
+        // interop 确定性钩子：同流两次加密产出相同 IV/密文（IV 仍由策略生成，I4 生成点不变）
         byte[] key = new byte[32];
         byte[] plain = Codec.utf8("deterministic");
         byte[] stream = new byte[64];

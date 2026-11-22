@@ -336,6 +336,7 @@ final class ConfigJsonParser {
         return false;
     }
 
+    /** 成员之间必须有逗号，或已到对象/数组结束符。 */
     private void requireCommaOrClose() {
         skipWhitespace();
         if (pos < json.length() && (json.charAt(pos) == '}' || json.charAt(pos) == ']')) {

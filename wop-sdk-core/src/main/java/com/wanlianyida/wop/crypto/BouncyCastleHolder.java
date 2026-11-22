@@ -14,6 +14,7 @@ public final class BouncyCastleHolder {
 
     private static final Provider PROVIDER = register();
 
+    /** 工具类禁实例化。 */
     private BouncyCastleHolder() {
     }
 

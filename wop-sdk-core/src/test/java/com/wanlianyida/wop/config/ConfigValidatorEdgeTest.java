@@ -13,6 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * ConfigValidator §3.4 语义校验消息、HTTP 参数校验与成功路径归一化全覆盖。
+ */
 class ConfigValidatorEdgeTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();

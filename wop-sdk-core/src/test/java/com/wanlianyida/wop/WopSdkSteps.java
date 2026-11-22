@@ -16,6 +16,10 @@ import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * WOP 商户 SDK 使用场景（spec v1.0）Gherkin 步骤定义。
+ * 复用黄金向量密钥（TestVectors）与平台响应装配（PlatformRig 模式）。
+ */
 public class WopSdkSteps {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -52,6 +56,7 @@ public class WopSdkSteps {
         }, System::currentTimeMillis);
     }
 
+    // ==================== 背景 ====================
 
     @假如("商户持有 WOP-RSA3072-SHA256 套件的商户私钥与平台公钥")
     public void merchantHasKeys() {
@@ -66,6 +71,7 @@ public class WopSdkSteps {
     public void expiredSeconds() {
     }
 
+    // ==================== 出向构建 ====================
 
     @当("^构建 L0 请求 GET /gateway/waybill-query 无 body$")
     public void buildL0GetNoBody() {
@@ -110,6 +116,7 @@ public class WopSdkSteps {
         draft = client.buildRequest("POST", SYNC_PATH, BODY, SecurityLevel.L2);
     }
 
+    // ==================== 出向断言 ====================
 
     @那么("请求无 x-wop-content-digest 头")
     public void noDigestHeader() {
@@ -193,6 +200,7 @@ public class WopSdkSteps {
         configurationErrorThrown();
     }
 
+    // ==================== 入向校验 ====================
 
     @当("平台返回 L0 响应 响应报文")
     public void platformL0Response() {
@@ -291,6 +299,7 @@ public class WopSdkSteps {
         assertEquals(VerifyResult.Reason.SIGNATURE_FAILED, verify.reason());
     }
 
+    // ==================== 套件与格式 ====================
 
     @当("解析套件 {string}（跨族）")
     public void parseCrossFamily(String suite) {
@@ -357,6 +366,7 @@ public class WopSdkSteps {
         assertTrue(lastError.getMessage().contains("base64url"), "解码错误: " + lastError.getMessage());
     }
 
+    // ==================== 密钥与防重放 ====================
 
     @当("分别用 PEM 与 Base64 单行格式构建两个客户端")
     public void pemAndBase64Clients() {
@@ -411,6 +421,7 @@ public class WopSdkSteps {
     public void deterministicSign() {
     }
 
+    // ==================== 辅助 ====================
 
     private static String pemWrap(String b64, String label) {
         StringBuilder sb = new StringBuilder("-----BEGIN " + label + "-----\n");
@@ -430,6 +441,7 @@ public class WopSdkSteps {
         }
     }
 
+    /** 平台响应装配（模拟网关侧：平台私钥签名 + L2 信封）。 */
     private static final class PlatformRig {
         private final String securityReq;
         private final String platformPrivB64;

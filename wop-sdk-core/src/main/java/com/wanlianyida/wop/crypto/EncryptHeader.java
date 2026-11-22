@@ -4,10 +4,19 @@ import com.wanlianyida.wop.WopError;
 
 import java.util.Objects;
 
+/**
+ * x-wop-encrypt 加密指令头编解码。
+ * <p>
+ * 格式：{@code <level>[;dek=<base64url(非对称包装(alg$key$iv))>]}；
+ * level 仅 {@code L0}（不加密，线上头缺席）与 {@code L2}（全文加密，dek 必填）；
+ * 算法套件由 x-wop-sign 的 securityReq 与 dekPayload 的 alg 段决定（本头不声明）。
+ */
 public final class EncryptHeader {
 
+    /** 解析结果；level=L0 时 dek 为 null（record 等价值语义：equals/hashCode 按全部字段）。 */
     public static final class Parsed {
 
+        /** 加密级别（L0/L2）。 */
         private final String level;
 
         /** DEK 载荷 base64url；L0 时为 null。 */
@@ -18,6 +27,7 @@ public final class EncryptHeader {
             this.dek = dek;
         }
 
+        /** 加密级别（L0/L2）。 */
         public String level() {
             return level;
         }
@@ -27,6 +37,7 @@ public final class EncryptHeader {
             return dek;
         }
 
+        /** 是否 L2 全文加密。 */
         public boolean isEncrypted() {
             return "L2".equals(level);
         }
@@ -54,6 +65,7 @@ public final class EncryptHeader {
         }
     }
 
+    /** 工具类禁实例化。 */
     private EncryptHeader() {
     }
 
@@ -89,6 +101,7 @@ public final class EncryptHeader {
         return new Parsed("L2", dek);
     }
 
+    /** 组装 L2 指令头。 */
     public static String buildL2(String dekB64Url) {
         return "L2;dek=" + dekB64Url;
     }

@@ -11,6 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * F4/D2 x-wop-content-digest 全语义：
+ * 无 body（GET/空体）→ 缺席；有 body 必产 `alg 小写hex` 恰一空格；
+ * formatRules 黄金向量全量（跨族/双空格/大写 hex/长度非法全拒）。
+ */
 class ContentDigestTest {
 
     private static final AlgorithmSuite RSA = AlgorithmSuite.parse("WOP-RSA3072-SHA256");
@@ -32,6 +37,7 @@ class ContentDigestTest {
 
     @Test
     void absentBodyProducesNoHeader() {
+        // D2：无 body（GET/空体）→ header 缺席，不定义"空串摘要"中间态
         assertNull(ContentDigest.build(RSA, null));
         assertNull(ContentDigest.build(RSA, new byte[0]));
         assertNull(ContentDigest.build(SM2, null));
@@ -73,6 +79,7 @@ class ContentDigestTest {
                             () -> ContentDigest.parse(value, suite), id + " 须拒收");
                     // spec:2.2 解析错误闭集：digest 头违规归 parse
                     assertEquals(WopError.Category.parse, ex.category());
+                    // 错误明确指出格式问题（解析类，非模糊）
                     assertTrue(ex.getMessage() != null && !ex.getMessage().trim().isEmpty());
                     break;
                 }
@@ -87,12 +94,12 @@ class ContentDigestTest {
                 }
                 case "b64url-trailing-bits-canonical-2": {
                     assertEquals("accept", expect, id + " expect 哨兵");
-                    assertArrayEquals(new byte[]{0x00}, Codec.b64UrlDecode(value));
+                    assertArrayEquals(new byte[]{0x00}, Codec.b64UrlDecode(value));        // "AA"
                     break;
                 }
                 case "b64url-trailing-bits-canonical-3": {
                     assertEquals("accept", expect, id + " expect 哨兵");
-                    assertArrayEquals(new byte[]{0x4D, 0x61}, Codec.b64UrlDecode(value));
+                    assertArrayEquals(new byte[]{0x4D, 0x61}, Codec.b64UrlDecode(value));  // "TWE" → "Ma"
                     break;
                 }
                 default:
@@ -113,14 +120,15 @@ class ContentDigestTest {
     void parseRejectsBlankAndMalformed() {
         assertThrows(WopError.class, () -> ContentDigest.parse(null, RSA));
         assertThrows(WopError.class, () -> ContentDigest.parse("", RSA));
-        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256", RSA));
-        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256 ", RSA));
-        assertThrows(WopError.class, () -> ContentDigest.parse(" sha-256 ab", RSA));
-        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256\t4cf7", RSA));
+        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256", RSA));       // 无空格
+        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256 ", RSA));      // 空 hex
+        assertThrows(WopError.class, () -> ContentDigest.parse(" sha-256 ab", RSA));   // 前导空格
+        assertThrows(WopError.class, () -> ContentDigest.parse("sha-256\t4cf7", RSA)); // 制表符
     }
 
     @Test
     void crossFamilyLabelRejected() {
+        // I5：sm3 标签配 RSA 套件 / sha-256 配 SM2 套件
         assertThrows(WopError.class, () -> ContentDigest.parse(
                 "sm3 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf", RSA));
         assertThrows(WopError.class, () -> ContentDigest.parse(

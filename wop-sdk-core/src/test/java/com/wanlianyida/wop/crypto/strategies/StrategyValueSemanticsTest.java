@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * CipherResult record→class 改写后的值语义契约（equals/hashCode/toString 按全部字段）。
+ * 数组字段按引用比较（record 等价语义）。
+ */
 class StrategyValueSemanticsTest {
 
     @Test

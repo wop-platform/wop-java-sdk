@@ -17,13 +17,24 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 密钥解析（KeyCodec 边缘，D12 分发契约）：字符串入参（PEM 或 Base64 单行）→ JCA Key（缓存解析，D7）。
+ * <ul>
+ *   <li>RSA：公钥 = X.509 SPKI（PEM 或 Base64）；私钥 = PKCS#8；密钥长度须与套件一致（2048/3072/4096）</li>
+ *   <li>SM2：公钥 = 未压缩点 04‖X‖Y 65B（Base64）或 SPKI；私钥 = d 32B 标量（Base64）或 PKCS#8；
+ *       曲线守卫 sm2p256v1（I5）</li>
+ * </ul>
+ * 解析失败抛 {@link WopError}（configuration 类错误，本地明确——鉴权前可判定，无 oracle 风险）。
+ */
 public final class KeyCodec {
 
     private static final ConcurrentHashMap<String, Object> CACHE = new ConcurrentHashMap<>();
 
+    /** 工具类禁实例化。 */
     private KeyCodec() {
     }
 
+    /** 解析公钥（merchant/platform 公钥按套件族路由格式）。 */
     public static PublicKey parsePublicKey(String pemOrBase64, AlgorithmSuite suite) {
         requireText(pemOrBase64, "公钥");
         return (PublicKey) CACHE.computeIfAbsent(cacheKey(suite, "pub", pemOrBase64),
@@ -63,6 +74,7 @@ public final class KeyCodec {
         }
     }
 
+    /** 实际解析私钥：RSA=PKCS#8（含长度校验）；SM2=d 32B 标量或 PKCS#8（含域校验）。 */
     private static PrivateKey doParsePrivate(byte[] der, AlgorithmSuite suite) {
         try {
             if ("RSA".equals(suite.keyAlgorithm())) {
@@ -70,6 +82,7 @@ public final class KeyCodec {
                 requireRsaLength((RSAKey) key, suite);
                 return key;
             }
+            // SM2：d 32B 标量（D12）或 PKCS#8
             if (der.length == 32) {
                 BigInteger d = new BigInteger(1, der);
                 com.wanlianyida.wop.crypto.strategies.Sm2Support.requireValidD(d);
@@ -96,10 +109,12 @@ public final class KeyCodec {
         }
     }
 
+    /** BC Provider 供给的 EC KeyFactory。 */
     private static KeyFactory ecFactory() throws Exception {
         return KeyFactory.getInstance("EC", BouncyCastleHolder.provider());
     }
 
+    /** sm2p256v1 命名曲线域（委托 {@code Sm2Support}）。 */
     private static ECNamedDomainParameters sm2Domain() {
         return com.wanlianyida.wop.crypto.strategies.Sm2Support.namedDomain();
     }
@@ -123,6 +138,7 @@ public final class KeyCodec {
         }
     }
 
+    /** 缓存键（securityReq:kind:hash:长度，避免持有密钥明文串）。 */
     private static String cacheKey(AlgorithmSuite suite, String kind, String key) {
         return suite.securityReq() + ':' + kind + ':' + key.hashCode() + ':' + key.length();
     }

@@ -11,6 +11,12 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 
+/**
+ * 国际密钥加密策略：RSA-OAEP <b>显式参数化</b>（F2/D10 头号跨语言漂移源）。
+ * <p>
+ * OAEP 摘要 SHA-256，MGF1 摘要<b>显式钉死 SHA-256</b>（JCA 串
+ * {@code OAEPWithSHA-256AndMGF1Padding} 的 MGF1 默认是 SHA-1，禁止依赖默认值），label 为空。
+ */
 public final class RsaOaepKeyEncryptStrategy implements KeyEncryptStrategy {
 
     public static final RsaOaepKeyEncryptStrategy INSTANCE = new RsaOaepKeyEncryptStrategy();
@@ -21,6 +27,7 @@ public final class RsaOaepKeyEncryptStrategy implements KeyEncryptStrategy {
     private static final OAEPParameterSpec OAEP =
             new OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
 
+    /** 无状态单例，私有构造。 */
     private RsaOaepKeyEncryptStrategy() {
     }
 

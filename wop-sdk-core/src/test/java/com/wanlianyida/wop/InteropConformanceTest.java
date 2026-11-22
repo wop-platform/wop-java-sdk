@@ -22,6 +22,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * interop conformance 消费端（协议编排跨仓一致性合同，wop-specs/interop/v1）。
+ * <p>
+ * fixture 构建期自 wop-specs 真源钉版拉取（classpath /interop-cases.json；pom sha256 钉 + 本类双哨兵），
+ * 与黄金向量（crypto-vectors.json）同源密钥材料。合同条款：
+ * <ul>
+ *   <li>build 方向：同 input（固定 timestamp/nonce/随机流）必须复现同 draft——
+ *       byte-exact 全量；deterministic-fields 按 opaque 剥离密钥参与段后比对</li>
+ *   <li>verify 方向：positive 断言通过且明文一致；negative 断言错误分类逐条对账
+ *       （本仓 {@link VerifyResult.Reason} → canonical class 显式映射见
+ *       {@link #canonicalClassOf}）</li>
+ *   <li>随机流消费顺序：[16B nonce 池（nonce 已由 fixture 提供可忽略）][CEK][12B IV][k…]</li>
+ * </ul>
+ */
 public class InteropConformanceTest {
 
     /** 真源 sha256（wop-specs/interop/v1/interop-cases.json）；与 pom wopSpecsInteropCasesSha256 双钉，升级样本集须同步。 */
@@ -46,6 +60,7 @@ public class InteropConformanceTest {
             "n15-digest-without-body", "n16-replay-cross-path",
             "n17-encrypt-missing-dek"));
 
+    // ==================== fixture 完整性哨兵 ====================
 
     /** Java 8 兼容全量读取（InputStream#readAllBytes 为 JDK 9+ API）。 */
     private static byte[] readAll(InputStream in) throws java.io.IOException {
@@ -98,13 +113,23 @@ public class InteropConformanceTest {
         assertEquals(KNOWN_IDS, seen, "已知 id 哨兵：登记 id 有缺失（fixture 被裁剪）");
     }
 
+    // ==================== 错误分类合同：本仓 Reason → canonical class 显式映射 ====================
 
+    /**
+     * 显式映射表（无 default 分支——新增 Reason 未登记映射即编译失败，防止分类合同静默漂移）。
+     * 依据 wop-specs/interop/v1 README 错误分类合同与已裁决分歧：
+     * n06 签名 b64 非法 → protocol；n13 DEK 载荷畸形（除 alg 跨族）→ decrypt-failed；
+     * n10 digest 未入签 → protocol；n09 缺 digest 头归完整性类 digest-mismatch（与 Go 真源对齐）。
+     */
     static String canonicalClassOf(VerifyResult.Reason reason) {
+        // Java 8 无 switch 表达式：经典 switch 全枚举 case + 末尾抛错兜底，
+        // 新增 Reason 未登记 case 即运行时立即抛错（穷尽守卫等价保留——
+        // switch 语句不像 switch 表达式那样编译期穷尽检查，故以显式兜底封闭）。
         switch (reason) {
             case SIGNATURE_FAILED:
-                return "verify-failed";
+                return "verify-failed";                                   // 验签类，模糊（I7）
             case DECRYPT_FAILED:
-                return "decrypt-failed";
+                return "decrypt-failed";                                  // 解密类，模糊（I7）
             case DIGEST_MISMATCH:
             case MISSING_DIGEST_HEADER:
                 return "digest-mismatch";                                 // 完整性类，明确（n02/n09）
@@ -119,11 +144,12 @@ public class InteropConformanceTest {
             case MISSING_HEADER:
             case INVALID_DIGEST_HEADER:
             case INVALID_ENCRYPTED_BODY:
-                return "protocol";
+                return "protocol";                                        // 解析/协议结构类，明确（n17 裸 L2 同类）
         }
         throw new IllegalStateException("Reason 未登记 canonical 分类: " + reason);
     }
 
+    // ==================== build 方向：同输入复现同 draft ====================
 
     @Test
     void buildDirectionReproducesDraft() {
@@ -181,6 +207,7 @@ public class InteropConformanceTest {
         assertEquals(6, builds, "build 用例数哨兵");
     }
 
+    // ==================== verify 方向：positive 明文一致 + negative 错误分类对账 ====================
 
     @Test
     void verifyDirectionPositiveAndNegative() {
@@ -221,7 +248,9 @@ public class InteropConformanceTest {
         assertEquals(17, negatives, "verify-negative 条数哨兵");
     }
 
+    // ==================== 辅助 ====================
 
+    /** 套件 → 黄金向量密钥材料 [priv, pub]（与真源生成器 interopClient 同一映射）。 */
     private static String[] keyMaterial(String suite) {
         JsonNode keys = TestVectors.keys("WOP-SM2-SM3".equals(suite) ? "sm2"
                 : "WOP-RSA4096-SHA256".equals(suite) ? "rsa4096" : "rsa3072");
@@ -238,6 +267,7 @@ public class InteropConformanceTest {
                 System::currentTimeMillis, () -> "unused");
     }
 
+    /** 小写 hex → 字节（Codec 仅提供编码方向；测试侧解码）。 */
     private static byte[] hexDecode(String hex) {
         byte[] out = new byte[hex.length() / 2];
         for (int i = 0; i < out.length; i++) {
@@ -247,6 +277,10 @@ public class InteropConformanceTest {
         return out;
     }
 
+    /**
+     * 确定性随机流（合同消费顺序 [CEK][12B IV][wrap 填充随机]；nonce 已由 fixture
+     * 提供故 16B nonce 池不消费）；耗尽后填 0x5A 与 Go 消费端 hexReader 同语义。
+     */
     public static final class StreamRandom extends SecureRandom {
         private final byte[] stream;
         private int pos;

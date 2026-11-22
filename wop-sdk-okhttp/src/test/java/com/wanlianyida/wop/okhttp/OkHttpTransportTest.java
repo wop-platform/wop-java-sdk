@@ -22,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * OkHttp 适配器：MockWebServer 覆盖请求映射/响应映射/错误传播。
+ */
 class OkHttpTransportTest {
 
     /** Java 8 无 Map.of：成对参数构造小请求头。 */
@@ -129,12 +132,14 @@ class OkHttpTransportTest {
     void defaultConstructorTrailingSlashBaseUrlAndRelativePath() throws Exception {
         enqueue(200, "x");
         server.start();
+        // 尾斜杠 baseUrl + 无斜杠相对 path
         OkHttpTransport trailing = new OkHttpTransport(server.url("/sub/").toString());
         TransportResponse response = trailing.send(
                 new RequestDraft("POST", "gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}));
         assertEquals(200, response.statusCode());
         assertEquals("/sub/gateway/x", server.takeRequest().getPath());
 
+        // 无参构造（无 baseUrl）+ 相对 path → 明确拒绝
         OkHttpTransport noArg = new OkHttpTransport();
         assertThrows(WopSdkException.class, () -> noArg.send(
                 new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
@@ -158,6 +163,7 @@ class OkHttpTransportTest {
                 new RequestDraft("POST", "/rel", headers(), new byte[]{1})));
     }
 
+    // spec:max-response-bytes —— 11MB 上限边界：超 1 字节拒 / 恰好上限过（两条路径：Content-Length 预检 + 流式计数）
 
     @Test
     void oversizedContentLengthRejectedBeforeRead() throws Exception {
@@ -172,6 +178,7 @@ class OkHttpTransportTest {
 
     @Test
     void chunkedOversizedBodyRejectedWhileStreaming() throws Exception {
+        // 分块传输无 Content-Length → 预检失效，须由流式计数在读取过程中中止
         server.enqueue(new MockResponse().setResponseCode(200)
                 .setChunkedBody(new okio.Buffer().write(new byte[OkHttpTransport.MAX_RESPONSE_BYTES + 1]),
                         64 * 1024));
@@ -216,6 +223,7 @@ class OkHttpTransportTest {
         assertArrayEquals(exact, response.body());
     }
 
+    // send(draft, TransportCall) 覆盖路径（§7.1）：null call / serverRoot 覆盖 / 超时单边覆盖
 
     @Test
     void sendWithNullCallUsesAdapterDefaults() throws Exception {
@@ -232,6 +240,7 @@ class OkHttpTransportTest {
     void callServerRootOverridesBaseUrl() throws Exception {
         enqueue(200, "ok");
         server.start();
+        // baseUrl 指向不可达地址：serverRoot 覆盖必须生效才能拿到 200（connect/read 双覆盖走 clientForCall 重建分支）
         OkHttpTransport transport = new OkHttpTransport("http://invalid.example");
         TransportResponse response = transport.send(
                 new RequestDraft("POST", "/gateway/x", headers("x-wop-appkey", "a"), new byte[]{1}),
@@ -248,6 +257,7 @@ class OkHttpTransportTest {
         server.start();
         OkHttpTransport transport = new OkHttpTransport();
         RequestDraft absolute = new RequestDraft("POST", server.url("/gw").toString(), headers(), new byte[]{1});
+        // 空串 serverRoot 视为未设置 → 走绝对 URL；connect/read 覆盖各自独立判定（单边覆盖分支）
         assertEquals(200, transport.send(absolute,
                 TransportCall.of("", TransportCall.USE_DEFAULT, TransportCall.USE_DEFAULT)).statusCode());
         assertEquals(200, transport.send(absolute,

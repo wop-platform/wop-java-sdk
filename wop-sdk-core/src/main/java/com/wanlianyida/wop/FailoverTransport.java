@@ -7,6 +7,9 @@ import java.net.NoRouteToHostException;
 import java.net.UnknownHostException;
 import java.util.List;
 
+/**
+ * Failover 包装传输（§7.3 P2）：主网关固定优先 + 备用有序切换；仅连接阶段失败可重试（K4）。
+ */
 public final class FailoverTransport implements Transport {
 
     private final Transport delegate;
@@ -61,6 +64,7 @@ public final class FailoverTransport implements Transport {
         return TransportCall.of(serverRoot, call.connectTimeoutMillis(), call.readTimeoutMillis());
     }
 
+    /** 连接阶段失败可重试；读超时/已收到响应/协议错误不重试（K4）。 */
     static boolean isPreSendRetryable(WopSdkException e) {
         Throwable cause = e.getCause();
         while (cause != null) {

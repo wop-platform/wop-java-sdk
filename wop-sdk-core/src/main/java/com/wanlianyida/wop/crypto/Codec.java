@@ -3,6 +3,15 @@ package com.wanlianyida.wop.crypto;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+/**
+ * 线上编码统一入口（F7/D10/D2）：
+ * <ul>
+ *   <li>二进制线上编码 = base64url <b>无填充严格模式</b>：拒收含 {@code =}/{@code +}/{@code /}、
+ *       长度 mod 4 == 1 的输入，以及<b>尾随位非零</b>的非规范编码（RFC 4648 §3.5，
+ *       语义同 Go base64.RawURLEncoding.Strict()；JDK 内建解码器对尾随位宽容，故须前置校验）</li>
+ *   <li>十六进制统一<b>小写</b>（.NET BitConverter 大写带连字符是经典翻车点，此处钉死）</li>
+ * </ul>
+ */
 public final class Codec {
 
     private static final Base64.Encoder B64URL = Base64.getUrlEncoder().withoutPadding();
@@ -10,6 +19,7 @@ public final class Codec {
 
     private static final char[] HEX = "0123456789abcdef".toCharArray();
 
+    /** 工具类禁实例化。 */
     private Codec() {
     }
 
@@ -18,6 +28,10 @@ public final class Codec {
         return B64URL.encodeToString(data);
     }
 
+    /**
+     * base64url 无填充<b>严格</b>解码：拒收字母表外的任何字符（含 {@code =}）、
+     * 长度 mod 4 == 1、尾随位非零的非规范编码（RFC 4648 §3.5）。
+     */
     public static byte[] b64UrlDecode(String text) {
         if (text == null) {
             throw new IllegalArgumentException("base64url 输入为 null");
@@ -34,6 +48,7 @@ public final class Codec {
         }
         int rem = length % 4;
         if (rem == 2 || rem == 3) {
+            // 尾组最后一字符的低 (rem==2 ? 4 : 2) 位是丢弃位，非零即非规范编码（JDK 解码器宽容，须显式拒收）
             int mask = rem == 2 ? 0xF : 0x3;
             if ((b64UrlCharIndex(text.charAt(length - 1)) & mask) != 0) {
                 throw new IllegalArgumentException(
@@ -57,6 +72,7 @@ public final class Codec {
         return new String(out);
     }
 
+    /** 是否为恰好 64 位小写 hex（摘要头 hex 段格式校验，D2）。 */
     public static boolean isLowerHex64(String text) {
         if (text == null || text.length() != 64) {
             return false;
@@ -70,10 +86,12 @@ public final class Codec {
         return true;
     }
 
+    /** UTF-8 字节。 */
     public static byte[] utf8(String text) {
         return text == null ? new byte[0] : text.getBytes(StandardCharsets.UTF_8);
     }
 
+    /** 字节拼接（避免 List&lt;byte[]&gt; 样板）。 */
     public static byte[] concat(byte[]... parts) {
         int total = 0;
         for (byte[] part : parts) {
@@ -88,6 +106,7 @@ public final class Codec {
         return out;
     }
 
+    /** 是否 base64url 字母表字符（A-Z / a-z / 0-9 / '-' / '_'）。 */
     private static boolean isB64UrlChar(char c) {
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
     }
@@ -96,6 +115,8 @@ public final class Codec {
     private static final String B64URL_ALPHABET =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
+    /** 字母表字符 → 6 位值（查表，位置即值）；字母表外（含 &gt;'z'）返回 -1，
+     *  调用前须已过 {@link #isB64UrlChar}，-1 仅作防御哨兵。 */
     private static int b64UrlCharIndex(char c) {
         return B64URL_ALPHABET.indexOf(c);
     }

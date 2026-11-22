@@ -9,6 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * crypto 包 record→class 改写后的值语义契约（equals/hashCode/toString 按全部字段）：
+ * 逐字段矩阵触达每个 Objects.equals 的 true/false 分支。数组字段按引用比较（record 等价语义）。
+ */
 class CryptoValueSemanticsTest {
 
     @Test

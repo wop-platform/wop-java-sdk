@@ -14,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * VerifyResult（record 生成方法 + 对外语义）与 Builder/请求边界闭合。
+ * §2.2：配置类失败（Builder/buildRequest）归类 configuration（肯定式断言 category）。
+ */
 class VerifyResultRecordTest {
 
     private static final String RSA_PRIV = TestVectors.keys("rsa3072").path("privatePkcs8B64").asText();
@@ -47,6 +51,7 @@ class VerifyResultRecordTest {
     void messageOfOkIsNullAndReasonEnumCoversAll() {
         assertNull(VerifyResult.ok(new byte[0]).message());
         assertNull(VerifyResult.ok(new byte[0]).reason());
+        // Reason 全枚举 message 非空（对外语义冻结）
         for (VerifyResult.Reason reason : VerifyResult.Reason.values()) {
             assertFalse(reason.message().trim().isEmpty());
         }
@@ -54,8 +59,9 @@ class VerifyResultRecordTest {
 
     @Test
     void builderEdgeBranches() {
+        // blank 字段全部拒绝（category=configuration）
         WopError e1 = assertThrows(WopError.class, () -> WopClient.builder().appKey(" ").build());
-        assertEquals(WopError.Category.configuration, e1.category());
+        assertEquals(WopError.Category.configuration, e1.category());   // spec:2.2
         assertThrows(WopError.class, () -> WopClient.builder().appKey("a").suite(" ").build());
         WopClient.Builder half = WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(" ").platformPublicKey(RSA_PUB);
@@ -63,6 +69,7 @@ class VerifyResultRecordTest {
         WopClient.Builder noPlatform = WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(RSA_PRIV).platformPublicKey(" ");
         assertThrows(WopError.class, noPlatform::build);
+        // expiredSeconds 边界
         WopClient.Builder badExpired = WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB).expiredSeconds(0);
         assertThrows(WopError.class, badExpired::build);
@@ -78,18 +85,22 @@ class VerifyResultRecordTest {
     void buildRequestEdgeBranches() {
         WopClient client = WopClient.builder().appKey("a").suite("WOP-RSA3072-SHA256")
                 .merchantPrivateKey(RSA_PRIV).platformPublicKey(RSA_PUB).build();
+        // null method / null path（category=configuration）
         WopError e1 = assertThrows(WopError.class, () -> client.buildRequest(null, "/p", null, SecurityLevel.L0));
-        assertEquals(WopError.Category.configuration, e1.category());
+        assertEquals(WopError.Category.configuration, e1.category());   // spec:2.2
         assertThrows(WopError.class, () -> client.buildRequest("POST", null, null, SecurityLevel.L0));
         // 空 body 数组按无 body 处理（digest 缺席）
         RequestDraft draft = client.buildRequest("GET", "/p", new byte[0], SecurityLevel.L0);
         assertFalse(draft.headers().containsKey("x-wop-content-digest"));
         assertNull(draft.wireBody());
+        // 空白签头响应拒绝
         assertEquals(VerifyResult.Reason.MISSING_SIGN_HEADER,
                 client.verifyResponse(Collections.singletonMap("x-wop-sign", "  "), Codec.utf8("{}"), "/p").reason());
+        // 空 digest 头值（有 body）
         assertEquals(VerifyResult.Reason.MISSING_DIGEST_HEADER,
                 client.verifyResponse(headerMap("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/a/b",
                         "x-wop-content-digest", " "), Codec.utf8("x"), "/p").reason());
+        // L2 但 digest 头为空白串
         assertEquals(VerifyResult.Reason.MISSING_DIGEST_HEADER,
                 client.verifyResponse(headerMap("x-wop-sign", "WOP-RSA3072-SHA256 v1/1800/a/b",
                         "x-wop-content-digest", ""), Codec.utf8("x"), "/p").reason());
