@@ -1,0 +1,8 @@
+{
+  "anchor": "fe6fed1e4",
+  "files": {
+    ".lefthook/comment-gate.py": "182197ae0149f95e6bf9745e85ad93fe7125e787bf5ae57214e2f807997f58fa",
+    ".lefthook/mutation-gate.sh": "5c1ac799a5a9a47acf7006f36f7f03c0ab257f77c9e69dbc704669d8fcc650bf",
+    "stryker.config.json": "73fdf767c577561a16efcfa505ca73edaab2e72d31201c5c7a2733ebcbd133ac"
+  }
+}
