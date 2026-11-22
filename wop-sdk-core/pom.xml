@@ -137,6 +137,7 @@
           </targetTests>
           <outputFormats>
             <param>HTML</param>
+            <param>XML</param>
           </outputFormats>
           <timestampedReports>false</timestampedReports>
           <mutationThreshold>90</mutationThreshold>

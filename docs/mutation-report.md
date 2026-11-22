@@ -50,6 +50,17 @@ PIT >> SEVERE : Coverage generator Minion exited abnormally due to UNKNOWN_ERROR
 - 结论：PIT 自动化在本环境不可用；以手工变异脚本（等价 mutator 集）替代，击杀率 100% 达成
 - 恢复路径：在 CI（GitHub Actions 标准 runner）运行 `mvn -pl wop-sdk-core org.pitest:pitest-maven:mutationCoverage`（pom 已配置 1.9.7 + mutationThreshold 90 / coverageThreshold 98）
 
+### 3.1 2026-11-22 复核：minion 崩溃未复现，PIT 本机可用（推翻上节结论）
+
+JDK17（`/usr/libexec/java_home -v 17`）+ pitest 1.9.7 + pitest-junit5-plugin 1.0.0（pom 原配置）在 macOS/arm64 直接运行 `mvn -pl wop-sdk-core org.pitest:pitest-maven:mutationCoverage` 成功出报告，§3 的 UNKNOWN_ERROR 未复现。当日实测（含 crypto/ConfigJsonParser 补测，见 KeyCodecSm2BranchTest / ConfigJsonParserBoundaryTest）：crypto 切片 KeyCodec 27/27、Sm2Support 19/19，config 切片 ConfigJsonParser 163/163，全 100% 击杀。
+
+两个附带发现（影响解读，非环境问题）：
+
+1. **pom `coverageThreshold=98` 会让切片运行（-DtargetClasses/-DtargetTests 收窄）在阈值检查处构建失败**（crypto 切片行覆盖 589/609=97%），但 mutations.xml 在阈值检查前已写出，解析不受影响；全量运行不受影响。
+2. **PIT 以 hotswap 复用同一 minion JVM，静态字段跨 mutant 存活**：`KeyCodec.CACHE`（computeIfAbsent）在首次测试执行后永久缓存固定向量材料，后续 mutant 运行全部缓存命中、`doParsePublic/doParsePrivate/sm2Domain/ecFactory` 等解析路径变异体不被执行而恒存活。故走该缓存的测试必须在**方法体内生成随机密钥材料**（每次执行恒 miss）；这也解释了本报告早前 KeyCodec 63% 基线中 8 个 NullReturnVals/边界存活体的成因。RSA 路径此前被杀正是因为其测试每次生成新密钥。
+
+§3 与 §4 的历史记录保留作存档；CI mutation 作业继续保留（`continue-on-error: true` 未动），手工脚本 scripts/mutation-check.py 可继续作为快速锚点，但"本环境不可用"的结论自即日起失效。
+
 ## 4. 复现
 
 ```bash

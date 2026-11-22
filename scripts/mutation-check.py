@@ -8,6 +8,13 @@
 过渡回归门禁；14 个变异点绑定源码文本快照，重构漂移会以 SKIP 报警（显性，非静默）。
 终态：CI PIT 稳定后本脚本退役，回归锚点移交 pit-reports。
 
+2026-11-22 实测纠错：脚本前提「PIT 在本环境 minion 崩溃」未复现——JDK17 + pitest
+1.9.7 + junit5-plugin 1.0.0（pom 原配置）在本机（macOS/arm64）实跑 PIT 成功出报告
+（crypto 切片 KeyCodec 27/27、Sm2Support 19/19；config 切片 ConfigJsonParser 163/163，
+见 docs/mutation-report.md §3.1）。本脚本可继续作快速锚点（14/14 亦经 PIT 复核），
+但不再是 PIT 不可用时的唯一替代；注意走 KeyCodec 静态 CACHE 的测试须用随机密钥
+材料避免 hotswap 缓存假存活。
+
 用法: python3 scripts/mutation-check.py
 退出码: 0 = 14/14 全击杀；1 = 存在 SURVIVED/SKIP/TIMEOUT（任一均为门禁失败）。
 """

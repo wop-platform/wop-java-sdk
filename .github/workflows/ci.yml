@@ -56,6 +56,8 @@ jobs:
 
   # PIT 变异测试：本机 macOS/arm64 minion 崩溃（docs/mutation-report.md §3），
   # 在 CI 标准环境验证；稳定后收紧门槛并替代手工脚本（scripts/mutation-check.py 退役）。
+  # 2026-11-22 复核：本机 JDK17 + pitest 1.9.7 实跑成功，minion 崩溃未复现（§3.1），
+  # 此作业保留作环境交叉验证（continue-on-error 维持原样未动）。
   mutation:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
