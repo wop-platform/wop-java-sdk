@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -69,6 +70,20 @@ class CanonicalRequestTest {
         assertEquals("", CanonicalRequest.trimall(""));
         assertEquals("", CanonicalRequest.trimall(" \t\n\r\f\u000B "));
         assertEquals("a b", CanonicalRequest.trimall("a         b"));
+    }
+
+    @Test
+    void trimallReturnsInputUnchangedWhenAlreadyCanonical() {
+        String canonical = "a b";
+        assertSame(canonical, CanonicalRequest.trimall(canonical));
+        assertSame("a b c d e", CanonicalRequest.trimall("a b c d e"));
+        assertSame("跨 语言", CanonicalRequest.trimall("跨 语言"));
+    }
+
+    @Test
+    void trimallRewritesOnlyWhenFoldChangesBytes() {
+        assertEquals("a b", CanonicalRequest.trimall("a  b"));
+        assertEquals("a b", CanonicalRequest.trimall("a\tb"));
     }
 
     @Test

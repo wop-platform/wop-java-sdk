@@ -57,9 +57,31 @@ public final class CanonicalRequest {
             return "";
         }
         String trimmed = text.trim();
-        StringBuilder sb = new StringBuilder(trimmed.length());
+        int length = trimmed.length();
+        int folded = 0;
+        boolean needsRewrite = false;
         boolean pendingSpace = false;
-        for (int i = 0; i < trimmed.length(); i++) {
+        for (int i = 0; i < length; i++) {
+            char c = trimmed.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r') {
+                if (pendingSpace || c != ' ') {
+                    needsRewrite = true;
+                }
+                if (!pendingSpace) {
+                    folded++;
+                }
+                pendingSpace = true;
+            } else {
+                pendingSpace = false;
+                folded++;
+            }
+        }
+        if (!needsRewrite) {
+            return trimmed;
+        }
+        StringBuilder sb = new StringBuilder(folded);
+        pendingSpace = false;
+        for (int i = 0; i < length; i++) {
             char c = trimmed.charAt(i);
             if (c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r') {
                 pendingSpace = true;
