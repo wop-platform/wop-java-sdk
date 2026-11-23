@@ -1,6 +1,7 @@
 package com.wanlianyida.wop.okhttp;
 
 import com.wanlianyida.wop.RequestDraft;
+import com.wanlianyida.wop.TransportCall;
 import com.wanlianyida.wop.WopSdkException;
 import okhttp3.OkHttpClient;
 import okhttp3.mockwebserver.MockResponse;
@@ -66,18 +67,20 @@ class OkHttpTransportPhaseTest {
 
     @Test
     void phaseTrackingIsPerCallNotSharedAcrossSends() throws Exception {
-        // 打标状态按调用独立：同一 transport 前一次成功不得让后一次失败误标 CONNECT
+        // 打标状态按调用独立：前一次成功已把阶段推到 SENT，后一次连接超时必须重新从 CONNECT 起算。
+        // 若阶段跨调用共享且不复位，第二次会残留 SENT，此断言即红。
         server.enqueue(new MockResponse().setBody("ok"));
-        server.enqueue(new MockResponse().setHeadersDelay(2, TimeUnit.SECONDS).setBody("late"));
         server.start();
         OkHttpClient client = new OkHttpClient.Builder()
                 .proxy(Proxy.NO_PROXY)
-                .connectTimeout(1, TimeUnit.SECONDS)
+                .connectTimeout(200, TimeUnit.MILLISECONDS)
                 .readTimeout(200, TimeUnit.MILLISECONDS)
                 .build();
         OkHttpTransport transport = new OkHttpTransport(server.url("/").toString(), client);
         assertEquals(200, transport.send(draft()).statusCode());
-        WopSdkException ex = assertThrows(WopSdkException.class, () -> transport.send(draft()));
-        assertEquals(WopSdkException.Phase.SENT, ex.phase());
+        WopSdkException ex = assertThrows(WopSdkException.class,
+                () -> transport.send(draft(), TransportCall.of("http://10.255.255.1:81", 200, 200)));
+        assertTrue(ex.getCause() instanceof java.net.SocketTimeoutException, String.valueOf(ex.getCause()));
+        assertEquals(WopSdkException.Phase.CONNECT, ex.phase());
     }
 }
