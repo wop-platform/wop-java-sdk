@@ -1,6 +1,6 @@
 # ADR: trimall 改手写扫描折叠（去掉 replaceAll 正则）
 
-- 状态: Proposed（待 PR 评审）
+- 状态: Accepted（PR #53）
 - 基线: `3af75c9`
 - 范围: `wop-sdk-core/src/main/java/com/wanlianyida/wop/crypto/CanonicalRequest.java` 的 `trimall`
 
