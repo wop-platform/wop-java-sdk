@@ -80,6 +80,7 @@ public final class JdkHttpTransport implements Transport {
         int readTimeout = resolveTimeout(call == null ? TransportCall.USE_DEFAULT : call.readTimeoutMillis(),
                 READ_TIMEOUT_MS);
         HttpURLConnection connection = null;
+        boolean sent = false;
         try {
             connection = (HttpURLConnection) new URL(resolve(draft, call)).openConnection();
             connection.setConnectTimeout(connectTimeout);
@@ -87,12 +88,18 @@ public final class JdkHttpTransport implements Transport {
             connection.setInstanceFollowRedirects(false);   // 与 java.net.http 默认一致：不跟随重定向
             draft.headers().forEach(connection::addRequestProperty);
             boolean normalizedGet = "GET".equals(draft.method()) || "HEAD".equals(draft.method());
-            if (normalizedGet) {
-                // GET/HEAD 归一：无实体（保留原 HttpClient 归一语义）
-                connection.setRequestMethod("GET");
-            } else {
+            if (!normalizedGet) {
                 connection.setRequestMethod(draft.method());
                 connection.setDoOutput(true);
+            }
+            // 显式建连：connect() 是连接阶段与发送阶段的唯一边界，返回后请求体才会写出。
+            // 未显式调用时，建连被推迟到 getOutputStream()/getResponseCode()，连接超时与
+            // 读超时同为 SocketTimeoutException，无法据此判定 failover 是否安全。
+            // GET/HEAD 归一为无实体 GET 无需再设方法（HttpURLConnection 默认即 GET，
+            // 且 setRequestMethod 必须在 connect() 之前调用）。
+            connection.connect();
+            sent = true;
+            if (!normalizedGet) {
                 byte[] wire = draft.wireBody() == null ? new byte[0] : draft.wireBody();
                 // 不设 setFixedLengthStreamingMode（保持默认缓冲模式，wire 本就是内存 byte[]）：
                 // streaming 模式下 JDK 遇 401/407 直接断连并丢弃错误响应体，
@@ -112,7 +119,8 @@ public final class JdkHttpTransport implements Transport {
             byte[] body = readEntity(connection, status);
             return new TransportResponse(status, collectHeaders(connection), body);
         } catch (IOException e) {
-            throw new WopSdkException("JDK HttpURLConnection 传输失败: " + e.getMessage(), e);
+            throw new WopSdkException("JDK HttpURLConnection 传输失败: " + e.getMessage(), e,
+                    sent ? WopSdkException.Phase.SENT : WopSdkException.Phase.CONNECT);
         } finally {
             if (connection != null) {
                 connection.disconnect();

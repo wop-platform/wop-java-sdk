@@ -31,6 +31,7 @@ public final class FailoverTransport implements Transport {
     public TransportResponse send(RequestDraft draft, TransportCall call) {
         int maxAttempts = 1 + Math.min(maxRetryCount, Math.max(0, candidates.size() - 1));
         WopSdkException last = null;
+        WopSdkException.Phase phase = WopSdkException.Phase.UNKNOWN;
         int attempted = 0;
         for (int i = 0; i < candidates.size() && attempted < maxAttempts; i++) {
             String root = candidates.get(i);
@@ -43,9 +44,10 @@ public final class FailoverTransport implements Transport {
                     throw e;
                 }
                 last = e;
+                phase = e.phase();
             }
         }
-        throw wrapExhausted(last, attempted);
+        throw wrapExhausted(last, phase, attempted);
     }
 
     private TransportResponse sendWithDelegate(RequestDraft draft, TransportCall attemptCall) {
@@ -64,8 +66,24 @@ public final class FailoverTransport implements Transport {
         return TransportCall.of(serverRoot, call.connectTimeoutMillis(), call.readTimeoutMillis());
     }
 
-    /** 连接阶段失败可重试；读超时/已收到响应/协议错误不重试（K4）。 */
+    /**
+     * 连接阶段失败可重试；读超时/已收到响应/协议错误不重试（K4）。
+     * <p>
+     * 优先按适配器打的传输阶段判定：连接超时与读超时异常类型相同，只有阶段能区分。
+     * 未打标（第三方 Transport）时退回异常类型白名单。
+     */
     static boolean isPreSendRetryable(WopSdkException e) {
+        switch (e.phase()) {
+            case CONNECT:
+                return true;
+            case SENT:
+                return false;
+            default:
+                return isConnectTypeFailure(e);
+        }
+    }
+
+    private static boolean isConnectTypeFailure(WopSdkException e) {
         Throwable cause = e.getCause();
         while (cause != null) {
             if (cause instanceof ConnectException
@@ -78,14 +96,13 @@ public final class FailoverTransport implements Transport {
         return false;
     }
 
-    private WopSdkException wrapExhausted(WopSdkException last, int attempted) {
-        int maxAttempts = 1 + Math.min(maxRetryCount, Math.max(0, candidates.size() - 1));
+    private WopSdkException wrapExhausted(WopSdkException last, WopSdkException.Phase phase, int attempted) {
         String message;
         if (attempted < candidates.size()) {
             message = "网关地址不可用（已尝试 " + attempted + " 个，已达重试上限 " + maxRetryCount + "）";
         } else {
             message = "全部网关地址不可用（已尝试 " + attempted + " 个）";
         }
-        return new WopSdkException(message, last);
+        return new WopSdkException(message, last, phase);
     }
 }
