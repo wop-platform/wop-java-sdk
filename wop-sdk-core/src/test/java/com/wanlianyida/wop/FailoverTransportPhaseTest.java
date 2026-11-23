@@ -8,8 +8,10 @@ import org.junit.jupiter.api.Test;
 
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,6 +51,7 @@ class FailoverTransportPhaseTest {
     @Test
     void connectPhaseSocketTimeoutFailsOver() {
         AtomicInteger attempts = new AtomicInteger();
+        List<String> roots = new ArrayList<>();
         Transport delegate = new Transport() {
             @Override
             public boolean supportsTransportCall() {
@@ -62,6 +65,7 @@ class FailoverTransportPhaseTest {
 
             @Override
             public TransportResponse send(RequestDraft d, TransportCall call) {
+                roots.add(call.serverRoot());
                 if (attempts.incrementAndGet() == 1) {
                     throw new WopSdkException("传输失败: Connect timed out",
                             new SocketTimeoutException("Connect timed out"),
@@ -73,7 +77,7 @@ class FailoverTransportPhaseTest {
         WopRequestContext ctx = context(1);
         TransportResponse response = new FailoverTransport(delegate, ctx).send(draft(), ctx.toTransportCall());
         assertEquals(200, response.statusCode());
-        assertEquals(2, attempts.get());
+        assertEquals(Arrays.asList("https://a.example.com/gateway", "https://b.example.com/gateway"), roots);
     }
 
     @Test
