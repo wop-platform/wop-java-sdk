@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * OkHttp Transport 适配器（薄封装：draft → okhttp Request → TransportResponse）。
@@ -64,7 +65,8 @@ public final class OkHttpTransport implements Transport {
 
     @Override
     public TransportResponse send(RequestDraft draft, TransportCall call) {
-        OkHttpClient effective = clientForCall(call);
+        AtomicReference<WopSdkException.Phase> phase = new AtomicReference<>(WopSdkException.Phase.CONNECT);
+        OkHttpClient effective = clientForCall(call, phase);
         Request.Builder builder = new Request.Builder().url(resolve(draft, call));
         RequestBody requestBody = draft.wireBody() == null
                 ? null
@@ -79,7 +81,7 @@ public final class OkHttpTransport implements Transport {
             byte[] body = readBodyLimited(response.body());
             return new TransportResponse(response.code(), headers, body);
         } catch (IOException e) {
-            throw new WopSdkException("OkHttp 传输失败: " + e.getMessage(), e);
+            throw new WopSdkException("OkHttp 传输失败: " + e.getMessage(), e, phase.get());
         }
     }
 
@@ -105,8 +107,15 @@ public final class OkHttpTransport implements Transport {
         return buffer.toByteArray();
     }
 
-    private OkHttpClient clientForCall(TransportCall call) {
+    private OkHttpClient clientForCall(TransportCall call, AtomicReference<WopSdkException.Phase> phase) {
         OkHttpClient.Builder builder = client.newBuilder().followRedirects(false);
+        // 网络拦截器在连接建立后、请求头写出前执行：它是「请求字节即将发出」的唯一边界。
+        // 应用拦截器/EventListener 做不到这点——前者在 RetryAndFollowUp 之前，后者拿不到
+        // 连接成功事件；connectTimeout 与 readTimeout 抛出的异常类型相同，只能按阶段判定。
+        builder.addNetworkInterceptor(chain -> {
+            phase.set(WopSdkException.Phase.SENT);
+            return chain.proceed(chain.request());
+        });
         if (call == null) {
             return builder.build();
         }
