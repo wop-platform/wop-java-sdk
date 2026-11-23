@@ -51,12 +51,49 @@ public final class CanonicalRequest {
         }
     }
 
-    /** Trimall：去首尾空白，连续空白折叠为单个空格。 */
+    /** Trimall：去首尾空白，连续空白折叠为单个空格（两级空白口径与等价性见 ADR-0002）。 */
     public static String trimall(String text) {
         if (text == null) {
             return "";
         }
-        return text.trim().replaceAll("\\s+", " ");
+        String trimmed = text.trim();
+        int length = trimmed.length();
+        int folded = 0;
+        boolean needsRewrite = false;
+        boolean pendingSpace = false;
+        for (int i = 0; i < length; i++) {
+            char c = trimmed.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r') {
+                if (pendingSpace || c != ' ') {
+                    needsRewrite = true;
+                }
+                if (!pendingSpace) {
+                    folded++;
+                }
+                pendingSpace = true;
+            } else {
+                pendingSpace = false;
+                folded++;
+            }
+        }
+        if (!needsRewrite) {
+            return trimmed;
+        }
+        StringBuilder sb = new StringBuilder(folded);
+        pendingSpace = false;
+        for (int i = 0; i < length; i++) {
+            char c = trimmed.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r') {
+                pendingSpace = true;
+            } else {
+                if (pendingSpace) {
+                    sb.append(' ');
+                    pendingSpace = false;
+                }
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     /** 规范标头（名称排序 + 编码，见类注释）。 */
