@@ -60,6 +60,46 @@ class CanonicalRequestTest {
     }
 
     @Test
+    void trimallFoldsOnlyAsciiRegexWhitespace() {
+        assertEquals("a b c", CanonicalRequest.trimall("a\n\r\f\u000Bb\tc"));
+        assertEquals("a\u0000b", CanonicalRequest.trimall("a\u0000b"));
+        assertEquals("a\u0001 b", CanonicalRequest.trimall("a\u0001   b"));
+        assertEquals("a\u0007 b", CanonicalRequest.trimall(" a\u0007  b "));
+        assertEquals("a b", CanonicalRequest.trimall(" a  b\u0007 "));
+        assertEquals("", CanonicalRequest.trimall(""));
+        assertEquals("", CanonicalRequest.trimall(" \t\n\r\f\u000B "));
+        assertEquals("a b", CanonicalRequest.trimall("a         b"));
+    }
+
+    @Test
+    void trimallIsEquivalentToLegacyRegexOracle() {
+        String[][] cases = {
+                {"", ""}, {" ", ""}, {"   ", ""}, {"x", "x"}, {" x ", "x"},
+                {"a b", "a b"}, {"a  b", "a b"}, {"a\tb", "a b"}, {"a\r\nb", "a b"},
+                {"  a \t b  ", "a b"}, {"a\u0000b", "a\u0000b"}, {"a\u0001\tb", "a\u0001 b"},
+                {"a\u000Bb", "a b"}, {"a\fb", "a b"}, {"\ta\tb\t", "a b"},
+                {"a\u00A0b", "a\u00A0b"}, {"跨 语言", "跨 语言"},
+                {"a b c d e", "a b c d e"}, {"a     b     c", "a b c"},
+        };
+        for (String[] c : cases) {
+            assertEquals(oracle(c[0]), CanonicalRequest.trimall(c[0]), "输入: " + escape(c[0]));
+            assertEquals(c[1], CanonicalRequest.trimall(c[0]), "期望: " + escape(c[0]));
+        }
+    }
+
+    private static String oracle(String text) {
+        return text == null ? "" : text.trim().replaceAll("\\s+", " ");
+    }
+
+    private static String escape(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (char c : s.toCharArray()) {
+            sb.append(c < 0x20 || c > 0x7E ? String.format("\\u%04X", (int) c) : String.valueOf(c));
+        }
+        return sb.toString();
+    }
+
+    @Test
     void canonicalHeadersSortByNameAsciiAndEncodeValues() {
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("X-Wop-Timestamp", " 1758900000000 ");
