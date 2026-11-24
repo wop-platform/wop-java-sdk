@@ -3,6 +3,7 @@ package com.wanlianyida.wop.crypto.strategies;
 import com.wanlianyida.wop.crypto.BouncyCastleHolder;
 import com.wanlianyida.wop.crypto.CryptoException;
 
+import java.security.Provider;
 import java.security.SecureRandom;
 
 import javax.crypto.Cipher;
@@ -48,8 +49,9 @@ public final class Sm4GcmStrategy implements MessageEncryptStrategy {
     CipherResult encryptForVector(byte[] plain, byte[] key, byte[] iv) {
         requireKey(key);
         requireIv(iv);
+        Provider provider = BouncyCastleHolder.provider();
         try {
-            Cipher cipher = Cipher.getInstance(TRANSFORMATION, BouncyCastleHolder.provider());
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION, provider);
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "SM4"), new GCMParameterSpec(TAG_BITS, iv));
             return new CipherResult(cipher.doFinal(plain), iv);
         } catch (Exception e) {
@@ -62,8 +64,9 @@ public final class Sm4GcmStrategy implements MessageEncryptStrategy {
     public byte[] decrypt(byte[] cipher, byte[] iv, byte[] key) {
         requireKey(key);
         requireIv(iv);
+        Provider provider = BouncyCastleHolder.provider();
         try {
-            Cipher decryptor = Cipher.getInstance(TRANSFORMATION, BouncyCastleHolder.provider());
+            Cipher decryptor = Cipher.getInstance(TRANSFORMATION, provider);
             decryptor.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "SM4"), new GCMParameterSpec(TAG_BITS, iv));
             return decryptor.doFinal(cipher);
         } catch (Exception e) {

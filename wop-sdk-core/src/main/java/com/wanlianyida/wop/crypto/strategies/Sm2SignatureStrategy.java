@@ -1,5 +1,6 @@
 package com.wanlianyida.wop.crypto.strategies;
 
+import com.wanlianyida.wop.crypto.BouncyCastleHolder;
 import com.wanlianyida.wop.crypto.CryptoException;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Integer;
@@ -39,9 +40,10 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
     private Sm2SignatureStrategy() {
     }
 
-    /** 加签（BC 产出 DER 后转裸 r‖s 64B，D9；userId 贯通 D14）。 */
+    /** 加签（BC 产出 DER 后转裸 r‖s 64B，D9；userId 贯通 D14）；版本守卫在 try 之外。 */
     @Override
     public byte[] sign(byte[] data, PrivateKey privateKey, byte[] userId) {
+        BouncyCastleHolder.provider();
         try {
             ECPrivateKeyParameters params = Sm2Support.toPrivateParams(privateKey);
             SM2Signer signer = new SM2Signer();
@@ -59,6 +61,7 @@ public final class Sm2SignatureStrategy implements SignatureStrategy {
         if (signature == null || signature.length != RS_BYTES * 2) {
             return false;
         }
+        BouncyCastleHolder.provider();
         try {
             ECPublicKeyParameters params = Sm2Support.toPublicParams(publicKey);
             SM2Signer verifier = new SM2Signer();

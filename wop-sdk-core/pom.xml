@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.wanlianyida</groupId>
     <artifactId>wop-java-sdk</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.0-jdk15on.1</version>
   </parent>
 
   <artifactId>wop-sdk-core</artifactId>
@@ -30,7 +30,7 @@
     <!-- 唯一运行时依赖：BouncyCastle（国密 SM2/SM3/SM4） -->
     <dependency>
       <groupId>org.bouncycastle</groupId>
-      <artifactId>bcprov-jdk18on</artifactId>
+      <artifactId>bcprov-jdk15on</artifactId>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -114,7 +114,7 @@
           <oldClassPathDependencies>
             <dependency>
               <groupId>org.bouncycastle</groupId>
-              <artifactId>bcprov-jdk18on</artifactId>
+              <artifactId>bcprov-jdk15on</artifactId>
               <version>${bc.version}</version>
             </dependency>
           </oldClassPathDependencies>

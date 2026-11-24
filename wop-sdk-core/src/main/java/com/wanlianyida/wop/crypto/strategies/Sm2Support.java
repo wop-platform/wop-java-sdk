@@ -1,5 +1,7 @@
 package com.wanlianyida.wop.crypto.strategies;
 
+import com.wanlianyida.wop.crypto.BouncyCastleHolder;
+
 import org.bouncycastle.crypto.params.ECDomainParameters;
 import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
 import org.bouncycastle.crypto.params.ECPublicKeyParameters;
@@ -26,8 +28,9 @@ public final class Sm2Support {
     private Sm2Support() {
     }
 
-    /** JCA BCEC 公钥 → BC 轻量参数（曲线守卫）。 */
+    /** JCA BCEC 公钥 → BC 轻量参数（曲线守卫）；SM2 轻量 API 不经过 JCA，此处承担版本守卫。 */
     public static ECPublicKeyParameters toPublicParams(PublicKey publicKey) {
+        BouncyCastleHolder.provider();
         if (!(publicKey instanceof ECPublicKey)) {
             throw new IllegalArgumentException("公钥非 SM2 椭圆曲线密钥");
         }
@@ -40,8 +43,9 @@ public final class Sm2Support {
         return Sm2DomainHolder.NAMED;
     }
 
-    /** JCA BCEC 私钥 → BC 轻量参数（曲线守卫）。 */
+    /** JCA BCEC 私钥 → BC 轻量参数（曲线守卫）；SM2 轻量 API 不经过 JCA，此处承担版本守卫。 */
     public static ECPrivateKeyParameters toPrivateParams(PrivateKey privateKey) {
+        BouncyCastleHolder.provider();
         if (!(privateKey instanceof ECPrivateKey)) {
             throw new IllegalArgumentException("私钥非 SM2 椭圆曲线密钥");
         }
